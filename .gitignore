@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors
+.idea/
+.vscode/
+.cursor/
+.history/
+
+# Node
+node_modules/
+npm-debug.log*
+dist/
+.cache/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
