@@ -65,8 +65,21 @@
 | `src/config/` | 常量、技能表、设计分辨率 |
 | `src/app/` | 应用生命周期、输入、主循环 |
 | `src/render/` | 精灵裁剪、动画姿态、绘制辅助 |
-| `src/ui/` | CSS、纯 DOM HUD（必须在 `#design-root` 内） |
+| `src/ui/` | CSS、纯 DOM HUD / 检视器（必须在 `#design-root` 内） |
 | `public/assets/` | 图片等静态资源 |
+
+用户要 **检视器 / 监视器 / 编辑器面板** 时再加（空壳不要默认做）：
+
+```
+src/ui/BoardInspector.ts      # 检视器 DOM：热键、拖拽、保存按钮、反馈动画
+src/config/board.ts           # 格子参数 + localStorage 读/写（按保存才写）
+```
+
+`index.html` 的 `#design-root` 内增加：
+
+```html
+<aside id="board-inspector" class="inspector"></aside>
+```
 
 ---
 
@@ -202,3 +215,77 @@ AI 应：
 ## 7. 一句话口令（可复制）
 
 > 按 `README-AI规范.md` + `README-分辨率.md` 生成 Vite+TS+Canvas 脚手架：1920×1080 letterbox，目录对齐规范，只做我明确说的功能，不要擅自加玩法或其它内容。
+
+---
+
+## 8. 检视器 / 监视器（用户点名才做）
+
+参考实现：本仓库 `RogueGame`（`src/ui/BoardInspector.ts` + `src/config/board.ts`）。
+
+像 Unity Inspector：右侧（或可拖）深色面板，改参数舞台马上变，**按「保存」才写入本地**。不要做成自动每改一次就 `localStorage`。
+
+### 8.1 必须遵守
+
+1. 面板是 HUD，**只能**放在 `#design-root` 里。`left` / `top` / `width` 用设计像素（相对 1920×1080），禁止 `vw` / `vh` / `window.innerWidth` 做面板布局。
+2. 拖拽位移用 `clientToDesign` + 当前 `computeDesignFit`（`visualViewport` 优先），把指针 delta 换算成设计像素，再改 `style.left` / `style.top`。面板不要拖出 1920×1080。
+3. 热键 **`1`**（`Digit1` / `Numpad1`）开关。焦点在 `input` / `textarea` 里时不要抢键。
+4. **禁止改一下就保存。** 滑条、颜色、拖位置都只改内存里的当前值（舞台可实时预览）。只有点「保存」才 `localStorage.setItem`。刷新未保存 = 回到上次保存。
+5. 读盘要校验：行列 / 尺寸 / 间距 clamp 到合法范围，颜色必须是 `#rrggbb`。坏数据或无数据用默认。
+6. 不要默认给空项目加检视器。用户没说就不要做。
+
+### 8.2 面板要有的控件
+
+最少：
+
+| 项 | 说明 |
+|---|---|
+| 格子大小 | range + number |
+| 列数 / 行数 | range + number |
+| 间距 | range + number |
+| 黑底颜色 | `input type=color` + hex 文本 |
+| 保存 | 按钮，中文「保存」 |
+
+标题栏可拖。绘制侧每帧读同一份 `BoardSettings`（`cols` / `rows` / `tileSize` / `tileGap` / `trayColor`），改完立刻画，不要等保存。
+
+建议范围（可按项目改，但要有上下限）：格子 24–280，行列 1–16，间距 0–48。
+
+### 8.3 本地存什么
+
+一个 key（例如 `roguegame.board-editor`）存 JSON：
+
+```ts
+{
+  settings: { cols, rows, tileSize, tileGap, trayColor, trayPad },
+  panelX: number,   // 设计像素
+  panelY: number,
+  hidden: boolean
+}
+```
+
+启动：`loadEditorSave()` → 填设置、放面板。点保存：`saveEditorSave()`。配额失败就忽略，不要弹窗。
+
+### 8.4 动画反馈（要做，但别花）
+
+| 动作 | 反馈 |
+|---|---|
+| 按 1 开关 | 用 class `is-open` 做透明度 + 轻微位移/缩放，**不要** `display:none` 硬切（关不了过渡） |
+| 拖标题栏 | 面板抬起（更大阴影、略放大），光标 grab → grabbing |
+| 拖滑条 | 右侧数字短暂 `scale` 一下 |
+| 有未保存修改 | 保存按钮金边（`is-dirty`） |
+| 点保存 | 按钮变绿，文案「已保存」，约 0.9s 后回到「保存」 |
+
+`prefers-reduced-motion: reduce` 时关掉这些过渡。
+
+开关不要用 `hidden` 属性（会 `display:none`）。默认 CSS 面板 `opacity: 0; visibility: hidden; pointer-events: none`，加上 `is-open` 才可见。
+
+### 8.5 文件职责
+
+- `src/config/board.ts`：设置类型、默认值、范围、`boardMetrics`（居中算 x/y）、load/save
+- `src/ui/BoardInspector.ts`：组 DOM、热键、拖拽、脏标记、保存按钮
+- `src/ui/styles.css`：`.inspector` 及上述状态
+- `src/render/board.ts`：只读 `BoardSettings` 画格子，不碰 localStorage
+- `GameApp`：启动时 `loadEditorSave()`，把同一份 settings 传给绘制和检视器
+
+### 8.6 口令
+
+> 按规范第 8 节做检视器：1 开关，标题栏拖动，改参实时预览，只有点保存才写本地。

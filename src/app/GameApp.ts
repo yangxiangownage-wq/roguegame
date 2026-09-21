@@ -1,8 +1,10 @@
 import { loadEditorSave, type BoardSettings } from '@/config/board';
 import {
   applyDesignStage,
+  clientToDesign,
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
+  type DesignFit,
 } from '@/config/design';
 import { StoneBoard } from '@/render/board';
 import { mountBoardInspector } from '@/ui/BoardInspector';
@@ -12,7 +14,9 @@ export class GameApp {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly board: StoneBoard;
   private readonly settings: BoardSettings;
+  private fit: DesignFit;
   private dpr = 1;
+  private lastTs = 0;
 
   private constructor(board: StoneBoard) {
     const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
@@ -27,15 +31,16 @@ export class GameApp {
     const inspector = document.querySelector<HTMLElement>('#board-inspector');
     if (!inspector) throw new Error('#board-inspector missing');
     mountBoardInspector(inspector, this.settings, save);
-    applyDesignStage();
+    this.fit = applyDesignStage();
     this.bindResize();
+    this.bindPointer();
   }
 
   static async create(): Promise<GameApp> {
     const board = await StoneBoard.create();
     const app = new GameApp(board);
     app.onResize();
-    requestAnimationFrame(() => app.tick());
+    requestAnimationFrame((t) => app.tick(t));
     return app;
   }
 
@@ -49,8 +54,33 @@ export class GameApp {
   private onResize(): void {
     const viewW = window.visualViewport?.width ?? window.innerWidth;
     const viewH = window.visualViewport?.height ?? window.innerHeight;
-    applyDesignStage('design-root', viewW, viewH);
+    this.fit = applyDesignStage('design-root', viewW, viewH);
     this.syncCanvasBuffer();
+  }
+
+  private bindPointer(): void {
+    const toDesign = (e: PointerEvent) =>
+      clientToDesign(e.clientX, e.clientY, this.fit);
+    this.canvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const p = toDesign(e);
+      this.board.pointerDown(p.x, p.y, this.settings);
+    });
+    this.canvas.addEventListener('pointerup', (e) => {
+      if (e.button !== 0) return;
+      const p = toDesign(e);
+      this.board.pointerUp(p.x, p.y, this.settings);
+    });
+    this.canvas.addEventListener('pointermove', (e) => {
+      const p = toDesign(e);
+      this.board.pointerMove(p.x, p.y, this.settings);
+    });
+    this.canvas.addEventListener('pointercancel', () => {
+      this.board.pointerCancel();
+    });
+    this.canvas.addEventListener('pointerleave', () => {
+      this.board.pointerCancel();
+    });
   }
 
   private syncCanvasBuffer(): void {
@@ -62,9 +92,12 @@ export class GameApp {
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   }
 
-  private tick(): void {
+  private tick(ts: number): void {
+    const dt = this.lastTs === 0 ? 0 : Math.min(0.05, (ts - this.lastTs) / 1000);
+    this.lastTs = ts;
+    this.board.update(dt);
     this.draw();
-    requestAnimationFrame(() => this.tick());
+    requestAnimationFrame((t) => this.tick(t));
   }
 
   private draw(): void {
