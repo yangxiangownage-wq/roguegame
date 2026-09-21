@@ -7,18 +7,20 @@ import {
   type DesignFit,
 } from '@/config/design';
 import { StoneBoard } from '@/render/board';
+import { FighterCards } from '@/render/fighterCards';
 import { mountBoardInspector } from '@/ui/BoardInspector';
 
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly board: StoneBoard;
+  private readonly fighters: FighterCards;
   private readonly settings: BoardSettings;
   private fit: DesignFit;
   private dpr = 1;
   private lastTs = 0;
 
-  private constructor(board: StoneBoard) {
+  private constructor(board: StoneBoard, fighters: FighterCards) {
     const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
     if (!canvas) throw new Error('#game-canvas missing');
     const ctx = canvas.getContext('2d');
@@ -26,6 +28,7 @@ export class GameApp {
     this.canvas = canvas;
     this.ctx = ctx;
     this.board = board;
+    this.fighters = fighters;
     const save = loadEditorSave();
     this.settings = save.settings;
     const inspector = document.querySelector<HTMLElement>('#board-inspector');
@@ -37,8 +40,8 @@ export class GameApp {
   }
 
   static async create(): Promise<GameApp> {
-    const board = await StoneBoard.create();
-    const app = new GameApp(board);
+    const [board, fighters] = await Promise.all([StoneBoard.create(), FighterCards.create()]);
+    const app = new GameApp(board, fighters);
     app.onResize();
     requestAnimationFrame((t) => app.tick(t));
     return app;
@@ -98,7 +101,7 @@ export class GameApp {
   private tick(ts: number): void {
     const dt = this.lastTs === 0 ? 0 : Math.min(0.05, (ts - this.lastTs) / 1000);
     this.lastTs = ts;
-    this.board.update(dt);
+    this.board.update(dt, this.settings);
     this.draw();
     requestAnimationFrame((t) => this.tick(t));
   }
@@ -106,5 +109,6 @@ export class GameApp {
   private draw(): void {
     this.ctx.clearRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
     this.board.draw(this.ctx, this.settings);
+    this.fighters.draw(this.ctx, this.settings);
   }
 }

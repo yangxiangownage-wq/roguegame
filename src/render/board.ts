@@ -1,4 +1,12 @@
 import { boardMetrics, type BoardSettings } from '@/config/board';
+import {
+  DISSOLVE_MASK,
+  DISSOLVE_SEC,
+  DISSOLVE_STAGGER_SEC,
+  ICON_FRAC,
+  drawDissolvingIcon,
+  spawnScale,
+} from '@/render/radialDissolve';
 
 const TILE_URLS = [
   '/assets/tiles/tile-00.png',
@@ -10,6 +18,9 @@ const TILE_URLS = [
   '/assets/tiles/tile-06.png',
 ];
 
+const ATTACK_URL = '/assets/icons/attack.png';
+const ICON_BUF = 256;
+
 type Cell = { col: number; row: number };
 
 type TileFx = {
@@ -18,6 +29,10 @@ type TileFx = {
   popT: number;
   hover: number;
   wantHover: number;
+  iconOn: boolean;
+  iconT: number;
+  iconDelay: number;
+  iconSeed: number;
 };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -73,12 +88,35 @@ export class StoneBoard {
   private readonly fx = new Map<string, TileFx>();
   private pressed: Cell | null = null;
   private hovered: Cell | null = null;
+  private readonly mask: HTMLCanvasElement;
+  private readonly maskCtx: CanvasRenderingContext2D;
+  private readonly iconBuf: HTMLCanvasElement;
+  private readonly iconBufCtx: CanvasRenderingContext2D;
 
-  private constructor(private readonly tiles: HTMLImageElement[]) {}
+  private constructor(
+    private readonly tiles: HTMLImageElement[],
+    private readonly attackIcon: HTMLImageElement,
+  ) {
+    this.mask = document.createElement('canvas');
+    this.mask.width = DISSOLVE_MASK;
+    this.mask.height = DISSOLVE_MASK;
+    const maskCtx = this.mask.getContext('2d', { willReadFrequently: true });
+    if (!maskCtx) throw new Error('2d mask canvas unavailable');
+    this.maskCtx = maskCtx;
+    this.iconBuf = document.createElement('canvas');
+    this.iconBuf.width = ICON_BUF;
+    this.iconBuf.height = ICON_BUF;
+    const iconBufCtx = this.iconBuf.getContext('2d');
+    if (!iconBufCtx) throw new Error('2d icon buffer unavailable');
+    this.iconBufCtx = iconBufCtx;
+  }
 
   static async create(): Promise<StoneBoard> {
-    const tiles = await Promise.all(TILE_URLS.map(loadImage));
-    return new StoneBoard(tiles);
+    const [tiles, attackIcon] = await Promise.all([
+      Promise.all(TILE_URLS.map(loadImage)),
+      loadImage(ATTACK_URL),
+    ]);
+    return new StoneBoard(tiles, attackIcon);
   }
 
   pointerDown(px: number, py: number, s: BoardSettings): void {
@@ -94,7 +132,11 @@ export class StoneBoard {
     this.pressed = null;
     if (was) this.fxOf(was).wantSquash = 0;
     if (!cell || !was || cell.col !== was.col || cell.row !== was.row) return;
-    this.fxOf(cell).popT = 0;
+    const fx = this.fxOf(cell);
+    fx.popT = 0;
+    fx.iconOn = true;
+    fx.iconT = 0;
+    fx.iconDelay = 0;
   }
 
   pointerMove(px: number, py: number, s: BoardSettings): boolean {
@@ -114,13 +156,29 @@ export class StoneBoard {
     this.hovered = null;
   }
 
-  update(dt: number): void {
+  update(dt: number, s: BoardSettings): void {
+    const cx = (s.cols - 1) / 2;
+    const cy = (s.rows - 1) / 2;
+    for (let row = 0; row < s.rows; row++) {
+      for (let col = 0; col < s.cols; col++) {
+        this.ensureIcon({ col, row }, cx, cy);
+      }
+    }
     const k = 1 - Math.exp(-14 * dt);
     const hk = 1 - Math.exp(-12 * dt);
     for (const fx of this.fx.values()) {
       fx.squash += (fx.wantSquash - fx.squash) * k;
       fx.hover += (fx.wantHover - fx.hover) * hk;
       fx.popT += dt / 0.28;
+      if (!fx.iconOn) continue;
+      if (fx.iconDelay > 0) {
+        fx.iconDelay -= dt;
+        if (fx.iconDelay >= 0) continue;
+        fx.iconT += -fx.iconDelay / DISSOLVE_SEC;
+        fx.iconDelay = 0;
+      } else {
+        fx.iconT += dt / DISSOLVE_SEC;
+      }
     }
   }
 
@@ -148,16 +206,41 @@ export class StoneBoard {
     const key = cellKey(cell.col, cell.row);
     let fx = this.fx.get(key);
     if (!fx) {
-      fx = { squash: 0, wantSquash: 0, popT: 99, hover: 0, wantHover: 0 };
+      fx = {
+        squash: 0,
+        wantSquash: 0,
+        popT: 99,
+        hover: 0,
+        wantHover: 0,
+        iconOn: false,
+        iconT: 0,
+        iconDelay: 0,
+        iconSeed: 0,
+      };
       this.fx.set(key, fx);
     }
     return fx;
   }
 
+  private ensureIcon(cell: Cell, cx: number, cy: number): void {
+    const fx = this.fxOf(cell);
+    if (fx.iconOn) return;
+    const ring = Math.max(Math.abs(cell.col - cx), Math.abs(cell.row - cy));
+    fx.iconOn = true;
+    fx.iconT = 0;
+    fx.iconDelay = ring * DISSOLVE_STAGGER_SEC;
+    fx.iconSeed = cell.row * 12.9898 + cell.col * 78.233;
+  }
+
   private isHot(cell: Cell): boolean {
     const fx = this.fx.get(cellKey(cell.col, cell.row));
     if (!fx) return false;
-    return fx.squash > 0.02 || fx.hover > 0.02 || fx.popT < 1;
+    return (
+      fx.squash > 0.02 ||
+      fx.hover > 0.02 ||
+      fx.popT < 1 ||
+      (fx.iconOn && fx.iconT < 1)
+    );
   }
 
   private popScale(t: number): number {
@@ -195,6 +278,35 @@ export class StoneBoard {
       g.fillStyle = `rgba(255,255,255,${0.42 * hover})`;
       g.fillRect(0, 0, size, size);
     }
+    this.drawAttackIcon(g, size, fx);
+    g.restore();
+  }
+
+  private drawAttackIcon(
+    g: CanvasRenderingContext2D,
+    size: number,
+    fx: TileFx | undefined,
+  ): void {
+    if (!fx?.iconOn) return;
+    const t = fx.iconT;
+    if (t <= 0) return;
+    const iconSize = size * ICON_FRAC;
+    const sc = spawnScale(t);
+    g.save();
+    g.translate(size / 2, size / 2);
+    g.scale(sc, sc);
+    g.translate(-iconSize / 2, -iconSize / 2);
+    drawDissolvingIcon(
+      g,
+      this.attackIcon,
+      iconSize,
+      t,
+      fx.iconSeed,
+      this.mask,
+      this.maskCtx,
+      this.iconBuf,
+      this.iconBufCtx,
+    );
     g.restore();
   }
 }
