@@ -97,13 +97,14 @@ export class StoneBoard {
     this.fxOf(cell).popT = 0;
   }
 
-  pointerMove(px: number, py: number, s: BoardSettings): void {
+  pointerMove(px: number, py: number, s: BoardSettings): boolean {
     const cell = hitCell(px, py, s);
     if (this.hovered && (!cell || cell.col !== this.hovered.col || cell.row !== this.hovered.row)) {
       this.fxOf(this.hovered).wantHover = 0;
     }
     this.hovered = cell;
     if (cell) this.fxOf(cell).wantHover = 1;
+    return cell !== null;
   }
 
   pointerCancel(): void {

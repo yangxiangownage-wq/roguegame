@@ -73,13 +73,16 @@ export class GameApp {
     });
     this.canvas.addEventListener('pointermove', (e) => {
       const p = toDesign(e);
-      this.board.pointerMove(p.x, p.y, this.settings);
+      const onTile = this.board.pointerMove(p.x, p.y, this.settings);
+      this.canvas.style.cursor = onTile ? 'pointer' : 'default';
     });
     this.canvas.addEventListener('pointercancel', () => {
       this.board.pointerCancel();
+      this.canvas.style.cursor = 'default';
     });
     this.canvas.addEventListener('pointerleave', () => {
       this.board.pointerCancel();
+      this.canvas.style.cursor = 'default';
     });
   }
 
