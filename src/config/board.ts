@@ -7,6 +7,16 @@ export type BoardSettings = {
   tileGap: number;
   trayColor: string;
   trayPad: number;
+  /** Design-pixel shift of the board from its centered origin. */
+  boardNudgeX: number;
+  boardNudgeY: number;
+  /** Design-pixel shift of each fighter card from its slot beside the centered board. */
+  heroNudgeX: number;
+  heroNudgeY: number;
+  foeNudgeX: number;
+  foeNudgeY: number;
+  /** Hand-card size as a percent of the 200×300 base. 100 keeps the current look. */
+  handCardScale: number;
 };
 
 export const TILE_SIZE_MIN = 24;
@@ -15,6 +25,12 @@ export const GRID_MIN = 1;
 export const GRID_MAX = 16;
 export const GAP_MIN = 0;
 export const GAP_MAX = 48;
+export const NUDGE_X_MIN = -960;
+export const NUDGE_X_MAX = 960;
+export const NUDGE_Y_MIN = -540;
+export const NUDGE_Y_MAX = 540;
+export const HAND_SCALE_MIN = 40;
+export const HAND_SCALE_MAX = 200;
 
 const SAVE_KEY = 'roguegame.board-editor';
 
@@ -37,6 +53,13 @@ export function createBoardSettings(): BoardSettings {
     tileGap: 10,
     trayColor: '#1a120e',
     trayPad: 5,
+    boardNudgeX: 0,
+    boardNudgeY: 0,
+    heroNudgeX: 0,
+    heroNudgeY: 0,
+    foeNudgeX: 0,
+    foeNudgeY: 0,
+    handCardScale: 100,
   };
 }
 
@@ -68,6 +91,13 @@ function parseSettings(raw: unknown): BoardSettings {
     tileGap: readInt(o.tileGap, d.tileGap, GAP_MIN, GAP_MAX),
     trayColor: color,
     trayPad: d.trayPad,
+    boardNudgeX: readInt(o.boardNudgeX, d.boardNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    boardNudgeY: readInt(o.boardNudgeY, d.boardNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    heroNudgeX: readInt(o.heroNudgeX, d.heroNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    heroNudgeY: readInt(o.heroNudgeY, d.heroNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    foeNudgeX: readInt(o.foeNudgeX, d.foeNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    foeNudgeY: readInt(o.foeNudgeY, d.foeNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    handCardScale: readInt(o.handCardScale, d.handCardScale, HAND_SCALE_MIN, HAND_SCALE_MAX),
   };
 }
 
@@ -100,17 +130,24 @@ export function boardMetrics(s: BoardSettings): {
   pitch: number;
   spanW: number;
   spanH: number;
+  /** Centered origin, before the board nudge. Fighter slots hang off this. */
+  originX: number;
+  originY: number;
   x: number;
   y: number;
 } {
   const pitch = s.tileSize + s.tileGap;
   const spanW = s.cols * s.tileSize + Math.max(0, s.cols - 1) * s.tileGap;
   const spanH = s.rows * s.tileSize + Math.max(0, s.rows - 1) * s.tileGap;
+  const originX = Math.round((DESIGN_WIDTH - spanW) / 2);
+  const originY = Math.round((DESIGN_HEIGHT - spanH) / 2);
   return {
     pitch,
     spanW,
     spanH,
-    x: Math.round((DESIGN_WIDTH - spanW) / 2),
-    y: Math.round((DESIGN_HEIGHT - spanH) / 2),
+    originX,
+    originY,
+    x: originX + s.boardNudgeX,
+    y: originY + s.boardNudgeY,
   };
 }

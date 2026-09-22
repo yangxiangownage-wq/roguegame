@@ -8,6 +8,8 @@ import {
 } from '@/config/design';
 import { StoneBoard } from '@/render/board';
 import { FighterCards } from '@/render/fighterCards';
+import { BattleView } from '@/ui/BattleView';
+import { battleLayout } from '@/config/battleLayout';
 import { mountBoardInspector } from '@/ui/BoardInspector';
 
 export class GameApp {
@@ -16,6 +18,7 @@ export class GameApp {
   private readonly board: StoneBoard;
   private readonly fighters: FighterCards;
   private readonly settings: BoardSettings;
+  private readonly battleView: BattleView;
   private fit: DesignFit;
   private dpr = 1;
   private lastTs = 0;
@@ -33,7 +36,8 @@ export class GameApp {
     this.settings = save.settings;
     const inspector = document.querySelector<HTMLElement>('#board-inspector');
     if (!inspector) throw new Error('#board-inspector missing');
-    mountBoardInspector(inspector, this.settings, save);
+    mountBoardInspector(inspector, this.settings, { ...save, hidden: true });
+    this.battleView = new BattleView(this.settings, this.board);
     this.fit = applyDesignStage();
     this.bindResize();
     this.bindPointer();
@@ -62,20 +66,25 @@ export class GameApp {
   }
 
   private bindPointer(): void {
-    const toDesign = (e: PointerEvent) =>
-      clientToDesign(e.clientX, e.clientY, this.fit);
+    const toDesign = (e: PointerEvent) => clientToDesign(e.clientX, e.clientY, this.fit);
+    const toBoard = (p: { x: number; y: number }) => {
+      const layout = battleLayout(this.settings);
+      return { x: (p.x - 960) / layout.scale + 960, y: (p.y - layout.centerY) / layout.scale + 540 };
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      const p = toDesign(e);
+      const design = toDesign(e);
+      if (this.battleView.targetClick(design.x, design.y)) { this.board.pointerCancel(); return; }
+      const p = toBoard(design);
       this.board.pointerDown(p.x, p.y, this.settings);
     });
     this.canvas.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return;
-      const p = toDesign(e);
+      const p = toBoard(toDesign(e));
       this.board.pointerUp(p.x, p.y, this.settings);
     });
     this.canvas.addEventListener('pointermove', (e) => {
-      const p = toDesign(e);
+      const p = toBoard(toDesign(e));
       const onTile = this.board.pointerMove(p.x, p.y, this.settings);
       this.canvas.style.cursor = onTile ? 'pointer' : 'default';
     });
@@ -101,14 +110,22 @@ export class GameApp {
   private tick(ts: number): void {
     const dt = this.lastTs === 0 ? 0 : Math.min(0.05, (ts - this.lastTs) / 1000);
     this.lastTs = ts;
-    this.board.update(dt, this.settings);
+    this.board.update(dt);
+    this.battleView.update(dt);
+    this.fighters.setBattle(this.battleView.battle);
     this.draw();
     requestAnimationFrame((t) => this.tick(t));
   }
 
   private draw(): void {
     this.ctx.clearRect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT);
+    const layout = battleLayout(this.settings);
+    this.ctx.save();
+    this.ctx.translate(960, layout.centerY);
+    this.ctx.scale(layout.scale, layout.scale);
+    this.ctx.translate(-960, -540);
     this.board.draw(this.ctx, this.settings);
     this.fighters.draw(this.ctx, this.settings);
+    this.ctx.restore();
   }
 }

@@ -2,7 +2,6 @@ import { boardMetrics, type BoardSettings } from '@/config/board';
 import {
   DISSOLVE_MASK,
   DISSOLVE_SEC,
-  DISSOLVE_STAGGER_SEC,
   ICON_FRAC,
   drawDissolvingIcon,
   spawnScale,
@@ -132,11 +131,21 @@ export class StoneBoard {
     this.pressed = null;
     if (was) this.fxOf(was).wantSquash = 0;
     if (!cell || !was || cell.col !== was.col || cell.row !== was.row) return;
-    const fx = this.fxOf(cell);
-    fx.popT = 0;
+    // Clicking a cell is only feedback. Contents are supplied by played cards.
+    this.fxOf(cell).popT = 0;
+  }
+
+  hasPiece(col: number, row: number): boolean {
+    return this.fx.get(cellKey(col, row))?.iconOn ?? false;
+  }
+
+  place(col: number, row: number, delay = 0): void {
+    const fx = this.fxOf({ col, row });
     fx.iconOn = true;
     fx.iconT = 0;
-    fx.iconDelay = 0;
+    fx.iconDelay = delay;
+    fx.iconSeed = row * 12.9898 + col * 78.233;
+    fx.popT = delay > 0 ? 99 : 0;
   }
 
   pointerMove(px: number, py: number, s: BoardSettings): boolean {
@@ -156,14 +165,7 @@ export class StoneBoard {
     this.hovered = null;
   }
 
-  update(dt: number, s: BoardSettings): void {
-    const cx = (s.cols - 1) / 2;
-    const cy = (s.rows - 1) / 2;
-    for (let row = 0; row < s.rows; row++) {
-      for (let col = 0; col < s.cols; col++) {
-        this.ensureIcon({ col, row }, cx, cy);
-      }
-    }
+  update(dt: number): void {
     const k = 1 - Math.exp(-14 * dt);
     const hk = 1 - Math.exp(-12 * dt);
     for (const fx of this.fx.values()) {
@@ -174,6 +176,7 @@ export class StoneBoard {
       if (fx.iconDelay > 0) {
         fx.iconDelay -= dt;
         if (fx.iconDelay >= 0) continue;
+        fx.popT = 0;
         fx.iconT += -fx.iconDelay / DISSOLVE_SEC;
         fx.iconDelay = 0;
       } else {
@@ -220,16 +223,6 @@ export class StoneBoard {
       this.fx.set(key, fx);
     }
     return fx;
-  }
-
-  private ensureIcon(cell: Cell, cx: number, cy: number): void {
-    const fx = this.fxOf(cell);
-    if (fx.iconOn) return;
-    const ring = Math.max(Math.abs(cell.col - cx), Math.abs(cell.row - cy));
-    fx.iconOn = true;
-    fx.iconT = 0;
-    fx.iconDelay = ring * DISSOLVE_STAGGER_SEC;
-    fx.iconSeed = cell.row * 12.9898 + cell.col * 78.233;
   }
 
   private isHot(cell: Cell): boolean {

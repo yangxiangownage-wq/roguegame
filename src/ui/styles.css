@@ -118,6 +118,29 @@ html, body {
   padding: 6px 14px;
 }
 
+.inspector-row-wide {
+  grid-template-columns: 92px 1fr;
+}
+
+.inspector-select,
+.inspector-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  color: #eee;
+  background: #1e1e1e;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 15px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+.inspector-select:focus,
+.inspector-text:focus {
+  outline: none;
+  border-color: #4a90d9;
+  background: #242424;
+}
+
 .inspector-label {
   color: #c8c8c8;
   font-size: 15px;

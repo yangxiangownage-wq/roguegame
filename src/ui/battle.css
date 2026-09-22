@@ -1,0 +1,161 @@
+.battle-ui {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  color: #f1e1bd; font-family: "PingFang SC", "Hiragino Sans GB", sans-serif;
+  user-select: none;
+}
+.battle-ui::before {
+  content: ''; position: absolute; inset: 955px 0 0;
+  background: linear-gradient(transparent, rgba(13, 10, 12, .62)); pointer-events: none;
+}
+.battle-ui button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.battle-ui button:focus-visible { outline: 3px solid #f6d698; outline-offset: 6px; }
+.battle-hand { position: absolute; inset: 0; pointer-events: none; }
+.hand-card {
+  position: absolute; left: 0; top: 0; width: 200px; height: 300px; padding: 0;
+  border: 0; border-radius: 14px; background: #241b19;
+  pointer-events: auto; touch-action: none; transform-origin: center;
+  box-shadow: 0 10px 22px rgba(9, 5, 6, .75); will-change: transform;
+  text-align: center; isolation: isolate;
+}
+.hand-card__art {
+  position: absolute; inset: 8px 8px 126px; overflow: hidden;
+  border-radius: 9px 9px 0 0; background: radial-gradient(ellipse at center, #44534b, #182222);
+}
+.hand-card--crimson .hand-card__art { background: radial-gradient(ellipse at center, #743c32, #291a1c); }
+.hand-card--amber .hand-card__art { background: radial-gradient(ellipse at center, #725135, #2c211b); }
+.hand-card__art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 21%; pointer-events: none; }
+.hand-card__art::after { content: ''; position: absolute; inset: 65% 0 0; background: linear-gradient(transparent, #241b19); }
+.hand-card--amber .hand-card__art img { filter: sepia(.65) brightness(.8); transform: rotate(30deg) scale(1.25); }
+.hand-card__frame { position: absolute; inset: 0; z-index: 2; background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat; pointer-events: none; filter: saturate(.75); }
+.hand-card__cost {
+  position: absolute; top: -11px; left: -12px; z-index: 3; width: 53px; height: 53px;
+  display: grid; place-items: center;
+  background: url('/assets/cards/cost.png') center / contain no-repeat;
+  font: 700 30px Georgia, serif; text-shadow: 0 2px 3px #17100b;
+}
+.hand-card__title { position: absolute; top: 168px; left: 12px; right: 12px; font-weight: 650; font-size: 20px; letter-spacing: 1px; }
+.hand-card__kind { position: absolute; top: 199px; left: 40px; right: 40px; font-size: 11px; color: #bca681; letter-spacing: 4px; }
+.hand-card__description { position: absolute; top: 222px; left: 13px; right: 13px; font-size: 12.5px; line-height: 1.65; color: #e2d4bb; }
+.hand-card.is-selected { box-shadow: 0 0 0 2px #d5b77a, 0 22px 45px #10090bcc; }
+.hand-card.is-unaffordable .hand-card__cost { color: #f0917c; filter: saturate(.7); }
+.hand-card.is-unaffordable .hand-card__art { filter: saturate(.5) brightness(.75); }
+.hand-card.is-dragged { cursor: grabbing; }
+.battle-energy {
+  position: absolute; left: 155px; top: 865px; width: 132px; height: 132px;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  border: 3px solid #ad8750; border-radius: 50%; background: radial-gradient(circle at 40% 25%, #384541, #171c1c 70%);
+  box-shadow: inset 0 0 0 5px #191b17, inset 0 0 0 6px #79623e, 0 12px 24px #150b12aa;
+}
+.battle-energy strong { font: 600 47px Georgia, serif; }
+.battle-energy small { font-size: 24px; color: #a8997c; }
+.battle-energy > span { font-size: 14px; margin-top: 4px; color: #c5b38f; }
+.battle-end {
+  position: absolute; top: 916px; right: 155px; width: 252px; height: 78px; pointer-events: auto;
+  border: 1px solid #c8a66a; border-radius: 9px; background: linear-gradient(#47352b, #281d19);
+  box-shadow: inset 0 0 0 4px #241b18, inset 0 0 0 5px #8a6844, 0 8px 18px #100a0aaa;
+  letter-spacing: 4px; font-size: 26px !important; font-weight: 650 !important;
+  transition: filter .15s, transform .15s;
+}
+.battle-end:hover:enabled { filter: brightness(1.25); transform: translateY(-3px); }
+.battle-end:active:enabled { transform: translateY(1px); }
+.battle-end:disabled { opacity: .5; cursor: default; }
+.battle-pile {
+  position: absolute; top: 932px; width: 100px; height: 125px; pointer-events: auto;
+  border: 0; background: transparent; padding: 0; text-align: center;
+}
+.battle-pile--draw { left: 206px; }
+.battle-pile--discard { right: 191px; }
+.battle-pile__back {
+  display: block; position: absolute; inset: 0 19px 36px; transform: rotate(-10deg);
+  border: 2px solid #a17a47; border-radius: 6px;
+  background: #402725 url('/assets/icons/attack.png') center / cover;
+  box-shadow: -5px 4px 0 #382a23, -7px 5px 0 #8b6943, -11px 9px 0 #382a23, -13px 10px 0 #8b6943;
+}
+.battle-pile--discard .battle-pile__back { transform: rotate(10deg); filter: saturate(.5); }
+.battle-pile strong { position: absolute; right: 5px; bottom: 32px; padding: 3px 8px; border-radius: 50%; background: #211816; font-size: 21px; }
+.battle-pile > span:last-child { position: absolute; bottom: 0; left: 0; right: 0; font-size: 15px; color: #d3bd94; }
+.battle-turn { position: absolute; top: 14px; left: 800px; width: 320px; text-align: center; text-shadow: 0 2px 5px #160e10; }
+.battle-turn span { font-size: 21px; letter-spacing: 3px; }
+.battle-turn small { font-size: 13px; margin-left: 17px; color: #c9b392; }
+.battle-intent { position: absolute; transform: translateX(-50%); white-space: nowrap; height: 36px; display: flex; align-items: center; gap: 9px; text-shadow: 0 2px 5px #140d0c; }
+.battle-intent span, .battle-intent small { font-size: 15px; color: #ebc1a2; }
+.battle-intent strong { font-size: 27px; color: #f1aa8c; }
+.battle-intent.is-selectable { pointer-events: auto; cursor: crosshair; }
+.battle-intent.is-selectable::after { content: ''; position: absolute; top: 38px; left: 50%; transform: translateX(-50%); width: 270px; height: calc(var(--target-height) - 65px); border: 2px solid #d0ab6e; border-radius: 16px; background: #e5b8740a; }
+.battle-intent.is-targeted::after { border-color: #ffdc99; background: #e5b87422; box-shadow: 0 0 22px #f5c77744; }
+.battle-guard { position: absolute; transform: translateX(-50%); font-size: 16px; color: #b3cbbd; opacity: .65; }
+.battle-guard.is-active { color: #daf4de; opacity: 1; }
+.battle-notice { position: absolute; left: 470px; top: 58px; width: 980px; text-align: center; font-size: 17px; letter-spacing: 1px; color: #e3cfaa; opacity: 0; transition: opacity .2s; text-shadow: 0 2px 5px #180f10; }
+.battle-notice.is-visible { opacity: 1; }
+.battle-float { position: absolute; font-size: 44px; font-weight: 750; color: #ffae92; text-shadow: 0 3px 8px #1c1010; z-index: 50; }
+.battle-float--block { color: #cbe8d5; font-size: 32px; }
+.battle-result, .battle-pile-dialog { position: absolute; inset: 0; z-index: 100; display: grid; place-items: center; pointer-events: auto; background: #120c10bb; }
+.battle-result[hidden], .battle-pile-dialog[hidden] { display: none; }
+.battle-result__panel, .battle-pile-dialog > div { width: 480px; padding: 48px; text-align: center; border: 1px solid #ad8750; border-radius: 14px; background: #251d1a; box-shadow: inset 0 0 0 7px #34271e, 0 25px 80px #090609bb; }
+.battle-result h1 { margin: 12px 0 22px; font: 700 64px "Songti SC", serif; letter-spacing: 12px; }
+.battle-result p, .battle-pile-dialog p { color: #cbb798; font-size: 17px; }
+.battle-result button, .battle-pile-dialog button { margin-top: 25px; padding: 16px 35px; background: #5e4430; border: 1px solid #bc955e; border-radius: 5px; }
+.battle-pile-dialog ul { list-style: none; padding: 0; text-align: left; }
+.battle-pile-dialog li { display: flex; justify-content: space-between; padding: 12px 0; }
+.battle-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .battle-ui *, .battle-ui *::before, .battle-ui *::after { transition: none !important; }
+}
+
+.battle-energy { width: 102px; height: 102px; }
+.battle-energy strong { font-size: 37px; }
+.battle-energy > span { font-size: 11px; }
+.battle-pile--draw { left: 280px; top: 940px; transform: scale(.8); }
+.battle-pile--discard { right: 280px; top: 985px; transform: scale(.65); transform-origin: top; }
+.battle-placement-target {
+  position: absolute; box-sizing: border-box; display: grid; place-items: center;
+  border: 3px solid #eed79d; border-radius: 10px; background: #e4c77e33;
+  color: #fff0c5; font-size: 19px; text-shadow: 0 2px 4px #1c130c;
+  pointer-events: none; z-index: 1;
+}
+.battle-placement-target.is-invalid { border-color: #cf7969; background: #8d3d3733; color: #f2b7a8; }
+.battle-placement-target[hidden], .battle-intent[hidden], .battle-guard[hidden] { display: none; }
+
+/* The hand overlays the board only while explicitly opened. */
+.battle-hand-surface {
+  position: absolute; left: 390px; top: 700px; width: 1140px; bottom: 48px;
+  pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 100%, #140c10c9, transparent 72%);
+  transition: opacity .2s ease;
+}
+.is-hand-open .battle-hand-surface { opacity: 1; }
+.battle-hand-toggle {
+  position: absolute; left: 510px; bottom: 0; width: 900px; height: 54px;
+  pointer-events: auto; z-index: 60; border: 0; border-top: 1px solid #9c7948;
+  border-radius: 18px 18px 0 0; background: linear-gradient(#382a22ee, #201815fa);
+  color: #e5d1a9; font-size: 19px !important; letter-spacing: 3px;
+  box-shadow: 0 -8px 28px #120b1044;
+  transition: background .2s, color .2s;
+}
+.battle-hand-toggle::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 18px -3px 0;
+  border-left: 2px solid currentColor; border-top: 2px solid currentColor;
+  transform: rotate(45deg); transition: transform .2s;
+}
+.is-hand-open .battle-hand-toggle::before { transform: rotate(225deg); margin-bottom: 1px; }
+.battle-hand-toggle:hover { background: #493626; color: #fff0cb; }
+@media (prefers-reduced-motion: reduce) {
+  .battle-hand-surface, .battle-hand-toggle, .battle-hand-toggle::before { transition: none; }
+}
+
+/* The same soft highlight and 8% press as the stone tiles. */
+.hand-card { transition: box-shadow .16s ease; }
+.hand-card::after {
+  content: ''; position: absolute; inset: 0; z-index: 5; border-radius: inherit;
+  pointer-events: none; opacity: 0;
+  background: linear-gradient(125deg, #fff4d578, #fff4d508 48%, transparent 65%);
+  transition: opacity .14s ease;
+}
+.hand-card.is-selected {
+  box-shadow: 0 0 0 2px #e8cd93, 0 0 18px #e5bb6930, 0 26px 42px #10090bcc;
+}
+.hand-card.is-selected::after { opacity: .48; }
+.hand-card.is-pressed { box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa; }
+.hand-card.is-pressed::after { opacity: .7; }
+.hand-card.is-dragged { box-shadow: 0 0 0 2px #efdbac, 0 30px 48px #10090b99; }
+.hand-card.is-playing::after { opacity: var(--play-flash, 0); background: #fff0ca; transition: none; }
