@@ -1,3 +1,4 @@
+import { PIECE_ART, type PieceKind } from '@/config/pieces';
 import { boardMetrics, type BoardSettings } from '@/config/board';
 import {
   DISSOLVE_MASK,
@@ -17,12 +18,9 @@ const TILE_URLS = [
   '/assets/tiles/tile-06.png',
 ];
 
-const ATTACK_URL = '/assets/icons/attack.png';
-const GOLD_URL = '/assets/icons/gold-mine.png?v=3';
 const ICON_BUF = 256;
 
 type Cell = { col: number; row: number };
-type PieceKind = 'mark' | 'gold';
 
 /** A few mines, spread across the board, stable for a given size. */
 export function goldMineCells(cols: number, rows: number): Cell[] {
@@ -154,6 +152,8 @@ export class StoneBoard {
   private wantDropGlow = 0;
   private dropGlow = 0;
   private dropSpin = 0;
+  private hintTime = 0;
+  private minePreview: Cell | null = null;
   private readonly mask: HTMLCanvasElement;
   private readonly maskCtx: CanvasRenderingContext2D;
   private readonly iconBuf: HTMLCanvasElement;
@@ -163,6 +163,7 @@ export class StoneBoard {
     private readonly tiles: HTMLImageElement[],
     private readonly attackIcon: HTMLImageElement,
     private readonly goldIcon: HTMLImageElement,
+    private readonly slaveIcon: HTMLImageElement,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -179,17 +180,23 @@ export class StoneBoard {
   }
 
   static async create(): Promise<StoneBoard> {
-    const [tiles, attackIcon, goldIcon] = await Promise.all([
+    const [tiles, attackIcon, goldIcon, slaveIcon] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
-      loadImage(ATTACK_URL),
-      loadImage(GOLD_URL),
+      loadImage(PIECE_ART.mark),
+      loadImage(PIECE_ART.gold),
+      loadImage(PIECE_ART.slave),
     ]);
-    return new StoneBoard(tiles, attackIcon, goldIcon);
+    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon);
   }
 
-  /** Warm gold rim and a subtle traveling reflection while a card is held over the tray. */
+  /** Enchanted destination highlight while the player is holding a card. */
   setDropHighlight(on: boolean): void {
     this.wantDropGlow = on ? 1 : 0;
+  }
+
+  /** Empty cell the held slave card is hovering, so its mining aim can be previewed. */
+  setMinePreview(cell: Cell | null): void {
+    this.minePreview = cell;
   }
 
   pointerDown(px: number, py: number, s: BoardSettings): void {
@@ -213,8 +220,17 @@ export class StoneBoard {
     return this.fx.get(cellKey(col, row))?.iconOn ?? false;
   }
 
-  place(col: number, row: number, delay = 0): void {
-    this.setPiece(col, row, 'mark', delay);
+  place(col: number, row: number, delay = 0, kind: 'mark' | 'slave' = 'mark'): void {
+    this.setPiece(col, row, kind, delay);
+  }
+
+  /** Hand off the held sprite to the board on its exact arrival frame. */
+  revealPlacedPiece(col: number, row: number): void {
+    const fx = this.fx.get(cellKey(col, row));
+    if (!fx?.iconOn) return;
+    fx.iconDelay = 0;
+    fx.iconT = 1;
+    fx.popT = 99;
   }
 
   /** Gold mines are already on the board when the battle opens. */
@@ -259,6 +275,7 @@ export class StoneBoard {
     const hk = 1 - Math.exp(-12 * dt);
     this.dropGlow += (this.wantDropGlow - this.dropGlow) * hk;
     if (this.dropGlow > 0.01) this.dropSpin = (this.dropSpin + dt * 0.32) % (Math.PI * 2);
+    this.hintTime += dt;
     for (const fx of this.fx.values()) {
       fx.squash += (fx.wantSquash - fx.squash) * k;
       fx.hover += (fx.wantHover - fx.hover) * hk;
@@ -295,6 +312,7 @@ export class StoneBoard {
     for (const cell of rest) this.drawTile(g, s, ox, oy, pitch, cell);
     for (const cell of popping) this.drawTile(g, s, ox, oy, pitch, cell);
     this.drawDropGlow(g, s, ox, oy, spanW, spanH);
+    this.drawMineHints(g, s, ox, oy, pitch);
   }
 
   private drawDropGlow(
@@ -523,7 +541,7 @@ export class StoneBoard {
     g.translate(-iconSize / 2, -iconSize / 2);
     drawDissolvingIcon(
       g,
-      fx.kind === 'gold' ? this.goldIcon : this.attackIcon,
+      fx.kind === 'gold' ? this.goldIcon : fx.kind === 'slave' ? this.slaveIcon : this.attackIcon,
       iconSize,
       t,
       fx.iconSeed,
@@ -532,6 +550,114 @@ export class StoneBoard {
       this.iconBuf,
       this.iconBufCtx,
     );
+    g.restore();
+  }
+
+  private isGold(col: number, row: number): boolean {
+    const fx = this.fx.get(cellKey(col, row));
+    return !!fx && fx.iconOn && fx.kind === 'gold' && fx.iconT > 0;
+  }
+
+  /** First orthogonal gold mine: up, then right, down, left. */
+  private aimMine(col: number, row: number, s: BoardSettings): (Cell & { dc: number; dr: number; angle: number }) | null {
+    const dirs = [
+      { dc: 0, dr: -1, angle: -Math.PI / 2 },
+      { dc: 1, dr: 0, angle: 0 },
+      { dc: 0, dr: 1, angle: Math.PI / 2 },
+      { dc: -1, dr: 0, angle: Math.PI },
+    ];
+    for (const dir of dirs) {
+      const nextCol = col + dir.dc;
+      const nextRow = row + dir.dr;
+      if (nextCol < 0 || nextRow < 0 || nextCol >= s.cols || nextRow >= s.rows) continue;
+      if (this.isGold(nextCol, nextRow)) return { col: nextCol, row: nextRow, ...dir };
+    }
+    return null;
+  }
+
+  private drawMineHints(
+    g: CanvasRenderingContext2D,
+    s: BoardSettings,
+    ox: number,
+    oy: number,
+    pitch: number,
+  ): void {
+    const pulse = 0.62 + 0.38 * Math.sin(this.hintTime * 5);
+    const sources: Cell[] = [];
+    for (let row = 0; row < s.rows; row++) {
+      for (let col = 0; col < s.cols; col++) {
+        const fx = this.fx.get(cellKey(col, row));
+        if (fx?.iconOn && fx.kind === 'slave' && fx.iconT > 0) sources.push({ col, row });
+      }
+    }
+    if (this.minePreview) sources.push(this.minePreview);
+    for (const cell of sources) {
+      const aim = this.aimMine(cell.col, cell.row, s);
+      if (aim) this.drawMineArrow(g, s, ox, oy, pitch, cell, aim, pulse);
+    }
+  }
+
+  private drawMineArrow(
+    g: CanvasRenderingContext2D,
+    s: BoardSettings,
+    ox: number,
+    oy: number,
+    pitch: number,
+    cell: Cell,
+    aim: Cell & { dc: number; dr: number; angle: number },
+    pulse: number,
+  ): void {
+    const size = s.tileSize;
+    const gap = pitch - size;
+    const sx = ox + cell.col * pitch;
+    const sy = oy + cell.row * pitch;
+    const cx = sx + size / 2 + aim.dc * (size / 2 + gap / 2);
+    const cy = sy + size / 2 + aim.dr * (size / 2 + gap / 2);
+    const len = Math.max(14, size * 0.22);
+    const wid = len * 0.9;
+
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(aim.angle);
+    g.globalAlpha = pulse;
+    g.fillStyle = '#f3d48a';
+    g.strokeStyle = '#4e3414';
+    g.lineWidth = Math.max(2, size * 0.025);
+    g.lineJoin = 'round';
+    g.beginPath();
+    g.moveTo(len * 0.58, 0);
+    g.lineTo(-len * 0.42, -wid * 0.52);
+    g.lineTo(-len * 0.16, 0);
+    g.lineTo(-len * 0.42, wid * 0.52);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.restore();
+
+    const mx = ox + aim.col * pitch;
+    const my = oy + aim.row * pitch;
+    const inset = size * 0.16;
+    const edge = 5;
+    g.save();
+    g.globalAlpha = pulse;
+    g.strokeStyle = '#f3d48a';
+    g.lineWidth = Math.max(4, size * 0.05);
+    g.lineCap = 'round';
+    g.beginPath();
+    if (aim.dc === 1) {
+      g.moveTo(mx + edge, my + inset);
+      g.lineTo(mx + edge, my + size - inset);
+    } else if (aim.dc === -1) {
+      g.moveTo(mx + size - edge, my + inset);
+      g.lineTo(mx + size - edge, my + size - inset);
+    } else if (aim.dr === 1) {
+      g.moveTo(mx + inset, my + edge);
+      g.lineTo(mx + size - inset, my + edge);
+    } else {
+      g.moveTo(mx + inset, my + size - edge);
+      g.lineTo(mx + size - inset, my + size - edge);
+    }
+    g.stroke();
     g.restore();
   }
 }

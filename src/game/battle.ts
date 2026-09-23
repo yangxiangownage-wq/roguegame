@@ -11,7 +11,7 @@ export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   slash: { title: '海盗斩击', cost: 2, kind: '攻击', description: ['造成 8 点伤害。', '本回合打出过其他攻击牌，', '则抽 1 张牌。'], damage: 8, comboDraw: true, art: 'foe', tone: 'crimson' },
   mist: { title: '雾影步', cost: 0, kind: '技能', description: ['获得 6 点格挡。', '下回合额外获得 1 点能量。'], block: 6, nextEnergy: 1, art: 'hero', tone: 'teal' },
   hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['造成 5 点伤害。', '获得 1 点能量。'], damage: 5, energy: 1, art: 'sword', tone: 'amber' },
-  slave: { title: '奴隶', cost: 1, kind: '技能', description: ['放入 1 个剑标记。'], art: 'slave', tone: 'crimson' },
+  slave: { title: '奴隶', cost: 1, kind: '技能', description: ['放入 1 个奴隶。'], art: 'slave', tone: 'crimson' },
 };
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
@@ -121,21 +121,31 @@ export class Battle {
     this.revision++;
     return true;
   }
-  resolveEnemy(): { damage: number; blocked: number } | null {
+  strikeEnemy(): { damage: number; blocked: number } | null {
     if (this.phase !== 'enemy') return null;
     const blocked = Math.min(this.block, this.intent);
     const damage = Math.min(this.heroHp, this.intent - blocked);
     this.heroHp -= damage;
     this.block = 0;
     if (this.heroHp <= 0) this.phase = 'lost';
-    else {
-      this.turn++;
-      this.energy = this.turnEnergy = 3 + this.nextEnergy;
-      this.nextEnergy = this.attacksPlayed = 0;
-      this.phase = 'player';
-      this.draw(5);
-    }
     this.revision++;
     return { damage, blocked };
+  }
+
+  beginPlayerTurn(): boolean {
+    if (this.phase !== 'enemy' || this.heroHp <= 0) return false;
+    this.turn++;
+    this.energy = this.turnEnergy = 3 + this.nextEnergy;
+    this.nextEnergy = this.attacksPlayed = 0;
+    this.phase = 'player';
+    this.draw(5);
+    this.revision++;
+    return true;
+  }
+
+  resolveEnemy(): { damage: number; blocked: number } | null {
+    const hit = this.strikeEnemy();
+    if (hit && this.phase === 'enemy') this.beginPlayerTurn();
+    return hit;
   }
 }
