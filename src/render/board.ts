@@ -77,7 +77,7 @@ function cellKey(col: number, row: number): string {
   return `${col},${row}`;
 }
 
-function roundRect(
+function addRoundRect(
   g: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -86,13 +86,51 @@ function roundRect(
   r: number,
 ): void {
   const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  g.beginPath();
   g.moveTo(x + rr, y);
   g.arcTo(x + w, y, x + w, y + h, rr);
   g.arcTo(x + w, y + h, x, y + h, rr);
   g.arcTo(x, y + h, x, y, rr);
   g.arcTo(x, y, x + w, y, rr);
   g.closePath();
+}
+
+function roundRect(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  g.beginPath();
+  addRoundRect(g, x, y, w, h, r);
+}
+
+/** Arc-length sampling keeps the enchanted threads continuous around corners. */
+function rimPoint(distance: number, w: number, h: number, radius: number): { x: number; y: number; nx: number; ny: number } {
+  const r = Math.min(radius, w / 2, h / 2);
+  const arc = Math.PI * r / 2;
+  const perimeter = 2 * (w + h - 4 * r) + 4 * arc;
+  let d = ((distance % perimeter) + perimeter) % perimeter;
+  const lengths = [w - 2 * r, h - 2 * r, w - 2 * r, h - 2 * r];
+  const starts = [[r, 0], [w, r], [w - r, h], [0, h - r]];
+  const centers = [[w - r, r], [w - r, h - r], [r, h - r], [r, r]];
+  for (let side = 0; side < 4; side++) {
+    const angle = side * Math.PI / 2;
+    const nx = Math.sin(angle);
+    const ny = -Math.cos(angle);
+    if (d <= lengths[side]!) return {
+      x: starts[side]![0]! + Math.cos(angle) * d,
+      y: starts[side]![1]! + Math.sin(angle) * d, nx, ny,
+    };
+    d -= lengths[side]!;
+    if (d <= arc) {
+      const a = angle - Math.PI / 2 + d / r;
+      return { x: centers[side]![0]! + Math.cos(a) * r, y: centers[side]![1]! + Math.sin(a) * r, nx: Math.cos(a), ny: Math.sin(a) };
+    }
+    d -= arc;
+  }
+  return { x: r, y: 0, nx: 0, ny: -1 };
 }
 
 function hitCell(px: number, py: number, s: BoardSettings): Cell | null {
@@ -113,6 +151,9 @@ export class StoneBoard {
   private readonly fx = new Map<string, TileFx>();
   private pressed: Cell | null = null;
   private hovered: Cell | null = null;
+  private wantDropGlow = 0;
+  private dropGlow = 0;
+  private dropSpin = 0;
   private readonly mask: HTMLCanvasElement;
   private readonly maskCtx: CanvasRenderingContext2D;
   private readonly iconBuf: HTMLCanvasElement;
@@ -144,6 +185,11 @@ export class StoneBoard {
       loadImage(GOLD_URL),
     ]);
     return new StoneBoard(tiles, attackIcon, goldIcon);
+  }
+
+  /** Warm gold rim and a subtle traveling reflection while a card is held over the tray. */
+  setDropHighlight(on: boolean): void {
+    this.wantDropGlow = on ? 1 : 0;
   }
 
   pointerDown(px: number, py: number, s: BoardSettings): void {
@@ -211,6 +257,8 @@ export class StoneBoard {
   update(dt: number): void {
     const k = 1 - Math.exp(-14 * dt);
     const hk = 1 - Math.exp(-12 * dt);
+    this.dropGlow += (this.wantDropGlow - this.dropGlow) * hk;
+    if (this.dropGlow > 0.01) this.dropSpin = (this.dropSpin + dt * 0.32) % (Math.PI * 2);
     for (const fx of this.fx.values()) {
       fx.squash += (fx.wantSquash - fx.squash) * k;
       fx.hover += (fx.wantHover - fx.hover) * hk;
@@ -246,6 +294,146 @@ export class StoneBoard {
     }
     for (const cell of rest) this.drawTile(g, s, ox, oy, pitch, cell);
     for (const cell of popping) this.drawTile(g, s, ox, oy, pitch, cell);
+    this.drawDropGlow(g, s, ox, oy, spanW, spanH);
+  }
+
+  private drawDropGlow(
+    g: CanvasRenderingContext2D,
+    s: BoardSettings,
+    ox: number,
+    oy: number,
+    spanW: number,
+    spanH: number,
+  ): void {
+    const glow = this.dropGlow;
+    if (glow < 0.01) return;
+    const pad = s.trayPad;
+    const x = ox - pad;
+    const y = oy - pad;
+    const w = spanW + pad * 2;
+    const h = spanH + pad * 2;
+    const time = this.dropSpin;
+    const breath = 0.88 + 0.12 * Math.sin(time * 6);
+    const perimeter = 2 * (w + h - 40) + 20 * Math.PI;
+    const samples = Math.ceil(perimeter / 5);
+    const points = Array.from({ length: samples }, (_, i) => rimPoint(i / samples * perimeter, w, h, 10));
+    g.save();
+    g.globalCompositeOperation = 'source-over';
+    g.lineJoin = 'round';
+
+    // All energy is outside the tray; the playable surface stays legible.
+    g.save();
+    g.beginPath();
+    g.rect(x - 72, y - 72, w + 144, h + 144);
+    addRoundRect(g, x, y, w, h, 10);
+    g.clip('evenodd');
+    for (let spread = 52; spread >= 4; spread -= 4) {
+      g.globalAlpha = glow * breath * 0.11 * Math.pow(1 - spread / 60, 1.4);
+      g.strokeStyle = spread > 24 ? '#dc6315' : '#ffb62e';
+      g.lineWidth = spread * 2;
+      roundRect(g, x, y, w, h, 10);
+      g.stroke();
+    }
+
+    // Filled, irregular ribbons produce a flame silhouette rather than neon wires.
+    for (let layer = 0; layer < 3; layer++) {
+      g.beginPath();
+      for (let i = 0; i < samples; i++) {
+        const phase = i / samples * Math.PI * 2;
+        const p = points[i]!;
+        const wave = Math.sin(phase * 19 - time * 10 + layer * 1.8);
+        const fine = Math.sin(phase * 37 + time * 14);
+        const crest = Math.pow(0.5 + 0.5 * Math.sin(phase * 7 - time * 4), 3);
+        const offset = (8 + 7 * wave + 3 * fine + 22 * crest) * (1 - layer * 0.27);
+        const px = x + p.x + p.nx * Math.max(2, offset);
+        const py = y + p.y + p.ny * Math.max(2, offset);
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.closePath();
+      addRoundRect(g, x, y, w, h, 10);
+      g.fillStyle = ['#e97814', '#ffb62f', '#ffe394'][layer]!;
+      g.globalAlpha = glow * breath * [0.24, 0.3, 0.42][layer]!;
+      g.fill('evenodd');
+    }
+
+    // Bright traveling crests have a soft body and a thin gold core.
+    const sheen = g.createConicGradient(time, x + w / 2, y + h / 2);
+    for (const [stop, alpha] of [[0, 0.12], [0.14, 0.3], [0.22, 1], [0.3, 0.12], [0.64, 0.3], [0.72, 1], [0.8, 0.12], [1, 0.12]]) {
+      sheen.addColorStop(stop!, `rgba(255, 225, 143, ${alpha})`);
+    }
+    g.beginPath();
+    for (let i = 0; i <= samples; i++) {
+      const phase = i / samples * Math.PI * 2;
+      const p = points[i % samples]!;
+      const offset = 5 + 2.5 * Math.sin(phase * 13 - time * 8) + 1.5 * Math.sin(phase * 29 + time * 6);
+      const px = x + p.x + p.nx * offset;
+      const py = y + p.y + p.ny * offset;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.strokeStyle = sheen;
+    g.globalAlpha = glow * 0.35;
+    g.lineWidth = 9;
+    g.stroke();
+    g.globalAlpha = glow;
+    g.lineWidth = 1.8;
+    g.stroke();
+
+    // Deterministic embers drift away from the boundary and fade before wrapping.
+    const emberCount = Math.min(64, Math.ceil(perimeter / 48));
+    for (let i = 0; i < emberCount; i++) {
+      const seed = i * 2.399963;
+      const life = ((time / (Math.PI * 2) * 6 + i * 0.618034) % 1);
+      const p = rimPoint(i / emberCount * perimeter + Math.sin(seed) * 28, w, h, 10);
+      const drift = 9 + life * (24 + 20 * (0.5 + 0.5 * Math.sin(seed)));
+      const tangent = Math.sin(life * 5 + seed) * 7;
+      const px = x + p.x + p.nx * drift - p.ny * tangent;
+      const py = y + p.y + p.ny * drift + p.nx * tangent;
+      g.globalAlpha = glow * Math.sin(life * Math.PI) * 0.8;
+      g.fillStyle = '#ffcb64';
+      g.beginPath();
+      g.ellipse(px, py, 1.2, 2.8 * (1 - life) + 0.5, seed, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+
+    // The original thin metal edge remains visible under the spell.
+    g.globalAlpha = glow;
+    g.strokeStyle = '#f6cd78';
+    g.lineWidth = 1.7;
+    roundRect(g, x, y, w, h, 10);
+    g.stroke();
+
+    const sealSize = Math.min(13, w / 8, h / 8);
+    for (const [cx, cy] of [[x - 5, y - 5], [x + w + 5, y - 5], [x + w + 5, y + h + 5], [x - 5, y + h + 5]]) {
+      g.save();
+      g.translate(cx!, cy!);
+      const aura = g.createRadialGradient(0, 0, 1, 0, 0, sealSize * 3);
+      aura.addColorStop(0, 'rgba(255, 219, 126, 0.8)');
+      aura.addColorStop(0.3, 'rgba(255, 166, 38, 0.4)');
+      aura.addColorStop(1, 'rgba(240, 107, 16, 0)');
+      g.globalAlpha = glow * breath;
+      g.fillStyle = aura;
+      g.fillRect(-sealSize * 3, -sealSize * 3, sealSize * 6, sealSize * 6);
+      g.rotate(Math.PI / 4);
+      g.fillStyle = '#573018';
+      g.strokeStyle = '#ffdb86';
+      g.lineWidth = 1.5;
+      g.fillRect(-sealSize / 2, -sealSize / 2, sealSize, sealSize);
+      g.strokeRect(-sealSize / 2, -sealSize / 2, sealSize, sealSize);
+      g.beginPath();
+      g.arc(0, 0, sealSize, time * 2, time * 2 + Math.PI * 0.7);
+      g.stroke();
+      g.beginPath();
+      g.arc(0, 0, sealSize, time * 2 + Math.PI, time * 2 + Math.PI * 1.7);
+      g.stroke();
+      g.fillStyle = '#fff0b6';
+      g.fillRect(-2, -2, 4, 4);
+      g.restore();
+    }
+    g.restore();
   }
 
   private fxOf(cell: Cell): TileFx {

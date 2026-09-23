@@ -14,7 +14,7 @@ type CardNode = {
   press: number; release: number;
   state: 'hand' | 'play' | 'discard'; elapsed: number; delay: number;
 };
-const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png' };
+const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png?v=2' };
 const DRAW_POSE: Pose = { x: 245, y: 965, angle: -24, scale: 0.32 };
 const DISCARD_POSE: Pose = { x: 1590, y: 965, angle: 24, scale: 0.32 };
 const PLAY_FLIGHT = 0.34;
@@ -221,9 +221,16 @@ export class BattleView {
     this.placementTarget.classList.toggle('is-invalid', occupied);
     this.placementTarget.textContent = occupied ? '已占用' : '放置';
   }
+
+  private syncDropHighlight(x: number, y: number): void {
+    const holding = !!(this.drag?.moved) || this.selected !== null;
+    this.board.setDropHighlight(holding && isBoardArea(this.settings, x, y));
+  }
+
   private pointerMove(event: PointerEvent): void {
     const p = this.point(event);
     if (this.selected !== null) this.previewTarget(p.x, p.y);
+    this.syncDropHighlight(p.x, p.y);
     if (!this.drag) {
       if (!this.expanded || this.battle.phase !== 'player' || !this.pileDialog.hidden || !this.result.hidden) return;
       const count = this.battle.hand.length;
@@ -241,6 +248,7 @@ export class BattleView {
       this.setExpanded(false);
     }
     this.previewTarget(p.x, p.y);
+    this.syncDropHighlight(p.x, p.y);
   }
   private pointerUp(event: PointerEvent): void {
     const drag = this.drag;
@@ -249,6 +257,7 @@ export class BattleView {
     this.drag = null;
     this.root.classList.remove('is-dragging');
     this.intent.classList.remove('is-targeted');
+    this.board.setDropHighlight(false);
     const node = this.nodes.get(drag.id);
     if (node?.element.hasPointerCapture(event.pointerId)) node.element.releasePointerCapture(event.pointerId);
     if (node) node.release = 0;
@@ -274,6 +283,7 @@ export class BattleView {
     this.placementTarget.hidden = true;
     this.root.classList.remove('is-dragging');
     this.intent.classList.remove('is-targeted');
+    this.board.setDropHighlight(false);
     this.setExpanded(true);
     this.message(message);
   }
@@ -291,6 +301,7 @@ export class BattleView {
     this.placementTarget.hidden = true;
     this.root.classList.remove('is-dragging');
     this.intent.classList.remove('is-targeted');
+    this.board.setDropHighlight(false);
   }
 
   /** Placement consumes the click before the board handles ordinary hover feedback. */
