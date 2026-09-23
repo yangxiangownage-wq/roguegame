@@ -17,6 +17,10 @@ export type BoardSettings = {
   foeNudgeY: number;
   /** Hand-card size as a percent of the 200×300 base. 100 keeps the current look. */
   handCardScale: number;
+  /** Pixels to raise the hand. Positive moves the cards up; 0 is the current resting height. */
+  handCardY: number;
+  /** Fan spacing as a percent of the default gap. Lower packs the cards closer together. */
+  handCardSpread: number;
 };
 
 export const TILE_SIZE_MIN = 24;
@@ -31,6 +35,10 @@ export const NUDGE_Y_MIN = -540;
 export const NUDGE_Y_MAX = 540;
 export const HAND_SCALE_MIN = 40;
 export const HAND_SCALE_MAX = 200;
+export const HAND_LIFT_MIN = -240;
+export const HAND_LIFT_MAX = 480;
+export const HAND_SPREAD_MIN = 20;
+export const HAND_SPREAD_MAX = 200;
 
 const SAVE_KEY = 'roguegame.board-editor';
 
@@ -60,6 +68,8 @@ export function createBoardSettings(): BoardSettings {
     foeNudgeX: 0,
     foeNudgeY: 0,
     handCardScale: 100,
+    handCardY: 0,
+    handCardSpread: 100,
   };
 }
 
@@ -98,6 +108,8 @@ function parseSettings(raw: unknown): BoardSettings {
     foeNudgeX: readInt(o.foeNudgeX, d.foeNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
     foeNudgeY: readInt(o.foeNudgeY, d.foeNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
     handCardScale: readInt(o.handCardScale, d.handCardScale, HAND_SCALE_MIN, HAND_SCALE_MAX),
+    handCardY: readInt(o.handCardY, d.handCardY, HAND_LIFT_MIN, HAND_LIFT_MAX),
+    handCardSpread: readInt(o.handCardSpread, d.handCardSpread, HAND_SPREAD_MIN, HAND_SPREAD_MAX),
   };
 }
 

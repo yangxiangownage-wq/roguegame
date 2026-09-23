@@ -37,6 +37,7 @@ export class GameApp {
     const inspector = document.querySelector<HTMLElement>('#board-inspector');
     if (!inspector) throw new Error('#board-inspector missing');
     mountBoardInspector(inspector, this.settings, { ...save, hidden: true });
+    this.board.seedGold(this.settings.cols, this.settings.rows);
     this.battleView = new BattleView(this.settings, this.board);
     this.fit = applyDesignStage();
     this.bindResize();

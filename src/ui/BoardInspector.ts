@@ -3,8 +3,12 @@ import {
   GAP_MIN,
   GRID_MAX,
   GRID_MIN,
+  HAND_LIFT_MAX,
+  HAND_LIFT_MIN,
   HAND_SCALE_MAX,
   HAND_SCALE_MIN,
+  HAND_SPREAD_MAX,
+  HAND_SPREAD_MIN,
   NUDGE_X_MAX,
   NUDGE_X_MIN,
   NUDGE_Y_MAX,
@@ -33,7 +37,9 @@ type NumericKey =
   | 'heroNudgeY'
   | 'foeNudgeX'
   | 'foeNudgeY'
-  | 'handCardScale';
+  | 'handCardScale'
+  | 'handCardY'
+  | 'handCardSpread';
 
 type Field = {
   key: NumericKey;
@@ -61,6 +67,8 @@ const POSITION_FIELDS: Field[] = [
 
 const HAND_FIELDS: Field[] = [
   { key: 'handCardScale', label: '尺寸 %', min: HAND_SCALE_MIN, max: HAND_SCALE_MAX, step: 1 },
+  { key: 'handCardY', label: '高度', min: HAND_LIFT_MIN, max: HAND_LIFT_MAX, step: 1 },
+  { key: 'handCardSpread', label: '间距 %', min: HAND_SPREAD_MIN, max: HAND_SPREAD_MAX, step: 1 },
 ];
 
 const PANEL_W = 360;
@@ -89,6 +97,8 @@ function payload(settings: BoardSettings, save: EditorSave): string {
     foeNudgeX: settings.foeNudgeX,
     foeNudgeY: settings.foeNudgeY,
     handCardScale: settings.handCardScale,
+    handCardY: settings.handCardY,
+    handCardSpread: settings.handCardSpread,
     panelX: save.panelX,
     panelY: save.panelY,
   });

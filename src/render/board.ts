@@ -18,9 +18,34 @@ const TILE_URLS = [
 ];
 
 const ATTACK_URL = '/assets/icons/attack.png';
+const GOLD_URL = '/assets/icons/gold-mine.png?v=3';
 const ICON_BUF = 256;
 
 type Cell = { col: number; row: number };
+type PieceKind = 'mark' | 'gold';
+
+/** A few mines, spread across the board, stable for a given size. */
+export function goldMineCells(cols: number, rows: number): Cell[] {
+  const total = cols * rows;
+  if (total <= 0) return [];
+  const count = Math.max(2, Math.min(total - 1, Math.round(total / 8)));
+  const stride = Math.max(1, Math.floor(total / count));
+  const cells: Cell[] = [];
+  const used = new Set<string>();
+  let n = Math.floor(cols / 2);
+  while (cells.length < count && used.size < total) {
+    const idx = n % total;
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const key = cellKey(col, row);
+    if (!used.has(key)) {
+      used.add(key);
+      cells.push({ col, row });
+    }
+    n += stride;
+  }
+  return cells;
+}
 
 type TileFx = {
   squash: number;
@@ -29,6 +54,7 @@ type TileFx = {
   hover: number;
   wantHover: number;
   iconOn: boolean;
+  kind: PieceKind;
   iconT: number;
   iconDelay: number;
   iconSeed: number;
@@ -95,6 +121,7 @@ export class StoneBoard {
   private constructor(
     private readonly tiles: HTMLImageElement[],
     private readonly attackIcon: HTMLImageElement,
+    private readonly goldIcon: HTMLImageElement,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -111,11 +138,12 @@ export class StoneBoard {
   }
 
   static async create(): Promise<StoneBoard> {
-    const [tiles, attackIcon] = await Promise.all([
+    const [tiles, attackIcon, goldIcon] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
       loadImage(ATTACK_URL),
+      loadImage(GOLD_URL),
     ]);
-    return new StoneBoard(tiles, attackIcon);
+    return new StoneBoard(tiles, attackIcon, goldIcon);
   }
 
   pointerDown(px: number, py: number, s: BoardSettings): void {
@@ -140,8 +168,23 @@ export class StoneBoard {
   }
 
   place(col: number, row: number, delay = 0): void {
+    this.setPiece(col, row, 'mark', delay);
+  }
+
+  /** Gold mines are already on the board when the battle opens. */
+  seedGold(cols: number, rows: number): void {
+    for (const cell of goldMineCells(cols, rows)) {
+      this.setPiece(cell.col, cell.row, 'gold', 0);
+      const fx = this.fxOf(cell);
+      fx.iconT = 1;
+      fx.popT = 99;
+    }
+  }
+
+  private setPiece(col: number, row: number, kind: PieceKind, delay: number): void {
     const fx = this.fxOf({ col, row });
     fx.iconOn = true;
+    fx.kind = kind;
     fx.iconT = 0;
     fx.iconDelay = delay;
     fx.iconSeed = row * 12.9898 + col * 78.233;
@@ -216,6 +259,7 @@ export class StoneBoard {
         hover: 0,
         wantHover: 0,
         iconOn: false,
+        kind: 'mark',
         iconT: 0,
         iconDelay: 0,
         iconSeed: 0,
@@ -291,7 +335,7 @@ export class StoneBoard {
     g.translate(-iconSize / 2, -iconSize / 2);
     drawDissolvingIcon(
       g,
-      this.attackIcon,
+      fx.kind === 'gold' ? this.goldIcon : this.attackIcon,
       iconSize,
       t,
       fx.iconSeed,
