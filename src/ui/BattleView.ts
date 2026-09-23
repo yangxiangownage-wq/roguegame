@@ -183,7 +183,7 @@ export class BattleView {
     const pieceArt = PIECE_ART[def.art === 'slave' ? 'slave' : 'mark'];
     preview.innerHTML = `<span class="placement-piece__halo"></span><img class="placement-piece__image" src="${pieceArt}" alt="" draggable="false"><span class="placement-piece__spark"></span>`;
     this.hand.append(element, preview);
-    const node: CardNode = { card, element, preview, morph: 0, pose: { ...DRAW_POSE }, vx: 0, vy: 0, va: 0, vs: 0, state: 'hand', press: 0, release: 1, elapsed: 0, delay, layer: 0 };
+    const node: CardNode = { card, element, preview, morph: 0, pose: { ...this.drawPose() }, vx: 0, vy: 0, va: 0, vs: 0, state: 'hand', press: 0, release: 1, elapsed: 0, delay, layer: 0 };
     this.nodes.set(card.id, node);
     return node;
   }
@@ -518,10 +518,52 @@ export class BattleView {
     return base * (this.settings.handCardSpread / 100);
   }
 
+  private drawPose(): Pose {
+    const s = this.settings;
+    return {
+      x: DRAW_POSE.x + s.drawNudgeX,
+      y: DRAW_POSE.y + s.drawNudgeY,
+      angle: DRAW_POSE.angle,
+      scale: DRAW_POSE.scale * s.drawScale / 100,
+    };
+  }
+
+  private discardPose(): Pose {
+    const s = this.settings;
+    return {
+      x: DISCARD_POSE.x + s.discardNudgeX,
+      y: DISCARD_POSE.y + s.discardNudgeY,
+      angle: DISCARD_POSE.angle,
+      scale: DISCARD_POSE.scale * s.discardScale / 100,
+    };
+  }
+
+  private layoutHud(): void {
+    const s = this.settings;
+    this.energy.style.left = `${155 + s.energyNudgeX}px`;
+    this.energy.style.top = `${865 + s.energyNudgeY}px`;
+    this.energy.style.transform = `scale(${s.energyScale / 100})`;
+    this.energy.style.transformOrigin = 'center';
+    this.drawPile.style.left = `${280 + s.drawNudgeX}px`;
+    this.drawPile.style.top = `${940 + s.drawNudgeY}px`;
+    this.drawPile.style.transform = `scale(${0.8 * s.drawScale / 100})`;
+    this.drawPile.style.transformOrigin = 'center';
+    this.discardPile.style.left = `${1540 + s.discardNudgeX}px`;
+    this.discardPile.style.right = 'auto';
+    this.discardPile.style.top = `${985 + s.discardNudgeY}px`;
+    this.discardPile.style.transform = `scale(${0.65 * s.discardScale / 100})`;
+    this.discardPile.style.transformOrigin = 'top center';
+    this.end.style.left = `${1513 + s.endNudgeX}px`;
+    this.end.style.right = 'auto';
+    this.end.style.top = `${916 + s.endNudgeY}px`;
+    this.end.style.setProperty('--hud-scale', String(s.endScale / 100));
+  }
+
   update(dt: number): void {
     if (this.resultTimer > 0) { this.resultTimer -= dt; if (this.resultTimer <= 0) this.showResult(); }
     if (this.noticeTimer > 0) { this.noticeTimer -= dt; if (this.noticeTimer <= 0) this.notice.classList.remove('is-visible'); }
     if (this.turnPause > 0) { this.turnPause -= dt; if (this.turnPause <= 0) this.advanceTurnCue(); }
+    this.layoutHud();
     const layout = battleLayout(this.settings);
     this.intent.style.left = `${layout.foeX}px`;
     this.intent.style.top = `${layout.foeTop - 52}px`;
@@ -605,11 +647,12 @@ export class BattleView {
         const t = this.reduced.matches ? 1 : Math.max(0, Math.min(1, node.elapsed / DISCARD_FLIGHT));
         const origin = node.origin ?? node.pose;
         const u = ease(t);
+        const pile = this.discardPose();
         target = {
-          x: mix(origin.x, DISCARD_POSE.x, u),
-          y: mix(origin.y, DISCARD_POSE.y, u) - Math.sin(Math.PI * t) * 42,
-          angle: mix(origin.angle, DISCARD_POSE.angle, u),
-          scale: mix(origin.scale, DISCARD_POSE.scale, u),
+          x: mix(origin.x, pile.x, u),
+          y: mix(origin.y, pile.y, u) - Math.sin(Math.PI * t) * 42,
+          angle: mix(origin.angle, pile.angle, u),
+          scale: mix(origin.scale, pile.scale, u),
         };
         // Fade on approach, without waiting for a spring to settle at the pile.
         node.element.style.opacity = String(1 - ease(Math.max(0, (t - 0.7) / 0.3)));

@@ -11,6 +11,7 @@ import { FighterCards } from '@/render/fighterCards';
 import { BattleView } from '@/ui/BattleView';
 import { battleLayout } from '@/config/battleLayout';
 import { mountBoardInspector } from '@/ui/BoardInspector';
+import { mountHudInspector } from '@/ui/HudInspector';
 
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
@@ -37,6 +38,9 @@ export class GameApp {
     const inspector = document.querySelector<HTMLElement>('#board-inspector');
     if (!inspector) throw new Error('#board-inspector missing');
     mountBoardInspector(inspector, this.settings, { ...save, hidden: true });
+    const hud = document.querySelector<HTMLElement>('#hud-inspector');
+    if (!hud) throw new Error('#hud-inspector missing');
+    mountHudInspector(hud, this.settings, { ...save, hudHidden: true });
     this.board.seedGold(this.settings.cols, this.settings.rows);
     this.battleView = new BattleView(this.settings, this.board);
     this.fit = applyDesignStage();

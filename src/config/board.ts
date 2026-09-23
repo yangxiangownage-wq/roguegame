@@ -21,6 +21,18 @@ export type BoardSettings = {
   handCardY: number;
   /** Fan spacing as a percent of the default gap. Lower packs the cards closer together. */
   handCardSpread: number;
+  energyNudgeX: number;
+  energyNudgeY: number;
+  energyScale: number;
+  drawNudgeX: number;
+  drawNudgeY: number;
+  drawScale: number;
+  discardNudgeX: number;
+  discardNudgeY: number;
+  discardScale: number;
+  endNudgeX: number;
+  endNudgeY: number;
+  endScale: number;
 };
 
 export const TILE_SIZE_MIN = 24;
@@ -39,6 +51,8 @@ export const HAND_LIFT_MIN = -240;
 export const HAND_LIFT_MAX = 480;
 export const HAND_SPREAD_MIN = 20;
 export const HAND_SPREAD_MAX = 200;
+export const HUD_SCALE_MIN = 40;
+export const HUD_SCALE_MAX = 200;
 
 const SAVE_KEY = 'roguegame.board-editor';
 
@@ -47,6 +61,9 @@ export type EditorSave = {
   panelX: number;
   panelY: number;
   hidden: boolean;
+  hudPanelX: number;
+  hudPanelY: number;
+  hudHidden: boolean;
 };
 
 function clamp(n: number, min: number, max: number): number {
@@ -70,6 +87,18 @@ export function createBoardSettings(): BoardSettings {
     handCardScale: 100,
     handCardY: 0,
     handCardSpread: 100,
+    energyNudgeX: 0,
+    energyNudgeY: 0,
+    energyScale: 100,
+    drawNudgeX: 0,
+    drawNudgeY: 0,
+    drawScale: 100,
+    discardNudgeX: 0,
+    discardNudgeY: 0,
+    discardScale: 100,
+    endNudgeX: 0,
+    endNudgeY: 0,
+    endScale: 100,
   };
 }
 
@@ -79,6 +108,9 @@ export function defaultEditorSave(): EditorSave {
     panelX: 1524,
     panelY: 96,
     hidden: false,
+    hudPanelX: 1148,
+    hudPanelY: 96,
+    hudHidden: true,
   };
 }
 
@@ -110,6 +142,18 @@ function parseSettings(raw: unknown): BoardSettings {
     handCardScale: readInt(o.handCardScale, d.handCardScale, HAND_SCALE_MIN, HAND_SCALE_MAX),
     handCardY: readInt(o.handCardY, d.handCardY, HAND_LIFT_MIN, HAND_LIFT_MAX),
     handCardSpread: readInt(o.handCardSpread, d.handCardSpread, HAND_SPREAD_MIN, HAND_SPREAD_MAX),
+    energyNudgeX: readInt(o.energyNudgeX, d.energyNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    energyNudgeY: readInt(o.energyNudgeY, d.energyNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    energyScale: readInt(o.energyScale, d.energyScale, HUD_SCALE_MIN, HUD_SCALE_MAX),
+    drawNudgeX: readInt(o.drawNudgeX, d.drawNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    drawNudgeY: readInt(o.drawNudgeY, d.drawNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    drawScale: readInt(o.drawScale, d.drawScale, HUD_SCALE_MIN, HUD_SCALE_MAX),
+    discardNudgeX: readInt(o.discardNudgeX, d.discardNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    discardNudgeY: readInt(o.discardNudgeY, d.discardNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    discardScale: readInt(o.discardScale, d.discardScale, HUD_SCALE_MIN, HUD_SCALE_MAX),
+    endNudgeX: readInt(o.endNudgeX, d.endNudgeX, NUDGE_X_MIN, NUDGE_X_MAX),
+    endNudgeY: readInt(o.endNudgeY, d.endNudgeY, NUDGE_Y_MIN, NUDGE_Y_MAX),
+    endScale: readInt(o.endScale, d.endScale, HUD_SCALE_MIN, HUD_SCALE_MAX),
   };
 }
 
@@ -124,6 +168,9 @@ export function loadEditorSave(): EditorSave {
       panelX: readInt(o.panelX, fallback.panelX, 0, DESIGN_WIDTH),
       panelY: readInt(o.panelY, fallback.panelY, 0, DESIGN_HEIGHT),
       hidden: Boolean(o.hidden),
+      hudPanelX: readInt(o.hudPanelX, fallback.hudPanelX, 0, DESIGN_WIDTH),
+      hudPanelY: readInt(o.hudPanelY, fallback.hudPanelY, 0, DESIGN_HEIGHT),
+      hudHidden: o.hudHidden === undefined ? fallback.hudHidden : Boolean(o.hudHidden),
     };
   } catch {
     return fallback;
