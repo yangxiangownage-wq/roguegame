@@ -16,6 +16,7 @@ type CardNode = {
 };
 const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png' };
 const PLAY_FLIGHT = 0.34;
+const DISCARD_FLIGHT = 0.92;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 
@@ -27,7 +28,7 @@ export class BattleView {
   private target: ReturnType<typeof boardTarget> = null;
   private readonly handToggle = document.createElement('button');
   private readonly handSurface = document.createElement('div');
-  private expanded = false;
+  private expanded = true;
   private readonly energy = document.createElement('div');
   private readonly end = document.createElement('button');
   private readonly drawPile = document.createElement('button');
@@ -155,10 +156,10 @@ export class BattleView {
       element.setPointerCapture(event.pointerId);
       this.root.classList.add('is-dragging');
     });
-    // All cards select a grid target; no card directly targets a fighter.
     element.addEventListener('click', event => {
       if (!this.expanded || event.detail !== 0 || this.nodes.get(card.id)?.state !== 'hand') return;
-      this.selected = card.id; this.setExpanded(false); this.message('已选择卡牌，点击空格放置；Esc 取消');
+      this.selected = this.hover = card.id;
+      this.message('点击空格放置，或拖到格子上；Esc 取消');
     });
     this.hand.append(element);
     const node: CardNode = { card, element, pose: { x: 245, y: 965, angle: -24, scale: 0.32 }, vx: 0, vy: 0, va: 0, vs: 0, state: 'hand', press: 0, release: 1, elapsed: 0, delay };
@@ -251,9 +252,30 @@ export class BattleView {
     if (node) node.release = 0;
     if (drag.moved) {
       if (this.canDrop(drag.id, p.x, p.y)) this.play(drag.id, p.x, p.y);
-      else { this.cancel(); this.message('请放入空格，已占用的格子不能重复放置'); }
-    } else { this.setExpanded(false); this.message('点击一个空格放置卡牌，Esc 取消'); }
+      else this.rejectPlacement(drag.id, '请放入空格，已占用的格子不能重复放置');
+    } else {
+      this.selected = this.hover = drag.id;
+      this.message('点击空格放置，或拖到格子上；Esc 取消');
+    }
   }
+
+  /** Failed placement returns the card to its fan slot and brings the hand back. */
+  private rejectPlacement(_id: number, message: string): void {
+    const drag = this.drag;
+    this.drag = null;
+    if (drag) {
+      const element = this.nodes.get(drag.id)?.element;
+      if (element?.hasPointerCapture(drag.pointer)) element.releasePointerCapture(drag.pointer);
+    }
+    this.hover = this.selected = null;
+    this.target = null;
+    this.placementTarget.hidden = true;
+    this.root.classList.remove('is-dragging');
+    this.intent.classList.remove('is-targeted');
+    this.setExpanded(true);
+    this.message(message);
+  }
+
   private cancel(collapseHand = true): void {
     const drag = this.drag;
     this.drag = null;
@@ -278,19 +300,20 @@ export class BattleView {
     }
     if (this.selected === null) this.toggleHand();
     else if (this.canDrop(this.selected, x, y)) this.play(this.selected, x, y);
-    else this.cancel();
+    else this.rejectPlacement(this.selected, '请放入空格，已占用的格子不能重复放置');
     return true;
   }
   private play(id: number, x: number, y: number): void {
     const node = this.nodes.get(id);
     if (!node || node.state !== 'hand') return;
     const target = boardTarget(this.settings, x, y);
-    if (!target || this.board.hasPiece(target.col, target.row)) return;
+    if (!target || this.board.hasPiece(target.col, target.row)) {
+      this.rejectPlacement(id, '请放入空格，已占用的格子不能重复放置');
+      return;
+    }
     const result = this.battle.placeCard(id);
     if (!result.ok) {
-      this.cancel(false);
-      this.setExpanded(true);
-      this.message(result.message);
+      this.rejectPlacement(id, result.message);
       node.element.animate([{ translate: '-8px 0' }, { translate: '7px 0' }, { translate: '0 0' }], { duration: this.reduced.matches ? 1 : 240 });
       return;
     }
@@ -339,7 +362,7 @@ export class BattleView {
     this.result.innerHTML = `<div class="battle-result__panel"><span>战斗结束</span><h1>${won ? '胜利' : '落幕'}</h1><p>${won ? '缝偶已被击败。' : '夜羽倒下了，再试一次。'}</p><p>经过 ${this.battle.turn} 回合 · 剩余生命 ${this.battle.heroHp} / ${this.battle.heroMaxHp}</p><button>再战一场</button></div>`;
     const restart = this.result.querySelector('button')!;
     restart.addEventListener('click', () => {
-      this.cancel();
+      this.cancel(false);
       for (const node of this.nodes.values()) node.element.remove();
       for (const node of this.departing) node.element.remove();
       this.nodes.clear();
@@ -347,6 +370,7 @@ export class BattleView {
       this.resultTimer = 0;
       this.battle.reset();
       this.result.hidden = true;
+      this.setExpanded(true);
       this.sync();
       this.message('新的战斗开始');
       this.end.focus();
@@ -421,7 +445,6 @@ export class BattleView {
       let target: Pose = { x: 960 + offset * spread, y: (this.expanded ? 860 + Math.abs(offset) * 6 : 1230) - lift, angle: offset * 3, scale: this.expanded ? 1 : 0.72 };
       if (this.expanded && activeIndex >= 0 && !active) target.x += Math.sign(index - activeIndex) * 24 * (this.settings.handCardSpread / 100);
       if (this.expanded && active) target = { ...target, y: 813 - lift, angle: 0, scale: 1.08 };
-      if (!this.expanded && this.selected === id) target = { x: 960, y: 927 - lift, angle: -3, scale: 0.68 };
       if (this.drag?.id === id && this.drag.moved) target = { x: this.drag.x, y: this.drag.y - 55, angle: Math.max(-12, Math.min(12, node.vx * 0.018)), scale: 0.65 };
       const pressed = this.drag?.id === id && !this.drag.moved;
       node.press += ((pressed ? 1 : 0) - node.press) * (1 - Math.exp(-24 * dt));
@@ -446,12 +469,19 @@ export class BattleView {
           node.element.style.opacity = String(1 - ease(settle));
           node.element.style.setProperty('--play-flash', String(Math.sin(travel * Math.PI) * 0.32));
         } else {
-          const u = ease(Math.min(1, t / 0.48));
-          target = { x: mix(origin.x, 1590, u), y: mix(origin.y, 1020, u) - Math.sin(u * Math.PI) * 90,
-            angle: mix(origin.angle, 24, u), scale: mix(origin.scale, 0.18, u) };
-          node.element.style.opacity = String(1 - Math.max(0, (u - 0.65) / 0.35));
+          const travel = Math.min(1, t / DISCARD_FLIGHT);
+          const u = travel * travel * (3 - 2 * travel);
+          // Lift across the board; shrinking along the bottom edge reads as the cards vanishing.
+          const arc = Math.sin(u * Math.PI);
+          target = {
+            x: mix(origin.x, 1590, u),
+            y: mix(origin.y, 990, u) - arc * 340,
+            angle: mix(origin.angle, 14, u),
+            scale: mix(origin.scale, 0.36, u * u),
+          };
+          node.element.style.opacity = String(1 - Math.max(0, (u - 0.8) / 0.2));
         }
-        if (t > (node.state === 'play' ? PLAY_FLIGHT + 0.18 : 0.5)) {
+        if (t > (node.state === 'play' ? PLAY_FLIGHT + 0.18 : DISCARD_FLIGHT)) {
           node.element.remove();
           if (this.nodes.get(id) === node) this.nodes.delete(id);
           continue;
@@ -480,7 +510,7 @@ export class BattleView {
       const tactileScale = this.reduced.matches || scripted ? 1 : 1 - node.press * 0.08 + rebound;
       const cardScale = this.settings.handCardScale / 100;
       node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150}px, 0) rotate(${p.angle}deg) scale(${p.scale * tactileScale * cardScale})`;
-      node.element.style.zIndex = String(node.state !== 'hand' ? 40 : active ? 30 : index + 1);
+      node.element.style.zIndex = String(node.state === 'discard' ? 70 : node.state !== 'hand' ? 40 : active ? 30 : index + 1);
       node.element.classList.toggle('is-selected', active && node.state === 'hand');
       node.element.classList.toggle('is-pressed', !!pressed);
       node.element.classList.toggle('is-dragged', this.drag?.id === id);
