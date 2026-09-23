@@ -36,7 +36,6 @@
 .hand-card__title { position: absolute; top: 168px; left: 12px; right: 12px; font-weight: 650; font-size: 20px; letter-spacing: 1px; }
 .hand-card__kind { position: absolute; top: 199px; left: 40px; right: 40px; font-size: 11px; color: #bca681; letter-spacing: 4px; }
 .hand-card__description { position: absolute; top: 222px; left: 13px; right: 13px; font-size: 12.5px; line-height: 1.65; color: #e2d4bb; }
-.hand-card.is-selected { box-shadow: 0 0 0 2px #d5b77a, 0 22px 45px #10090bcc; }
 .hand-card.is-unaffordable .hand-card__cost { color: #f0917c; filter: saturate(.7); }
 .hand-card.is-unaffordable .hand-card__art { filter: saturate(.5) brightness(.75); }
 .hand-card.is-dragged { cursor: grabbing; }
@@ -143,19 +142,20 @@
   .battle-hand-surface, .battle-hand-toggle, .battle-hand-toggle::before { transition: none; }
 }
 
-/* The same soft highlight and 8% press as the stone tiles. */
-.hand-card { transition: box-shadow .16s ease; }
-.hand-card::after {
-  content: ''; position: absolute; inset: 0; z-index: 5; border-radius: inherit;
-  pointer-events: none; opacity: 0;
-  background: linear-gradient(125deg, #fff4d578, #fff4d508 48%, transparent 65%);
-  transition: opacity .14s ease;
-}
+.hand-card { overflow: visible; transition: box-shadow .16s ease, filter .16s ease; }
 .hand-card.is-selected {
-  box-shadow: 0 0 0 2px #e8cd93, 0 0 18px #e5bb6930, 0 26px 42px #10090bcc;
+  box-shadow:
+    0 0 0 2px #e8cd93,
+    0 0 16px #e5bb6966,
+    0 26px 42px #10090bcc;
 }
-.hand-card.is-selected::after { opacity: .48; }
-.hand-card.is-pressed { box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa; }
-.hand-card.is-pressed::after { opacity: .7; }
-.hand-card.is-dragged { box-shadow: 0 0 0 2px #efdbac, 0 30px 48px #10090b99; }
-.hand-card.is-playing::after { opacity: var(--play-flash, 0); background: #fff0ca; transition: none; }
+.hand-card.is-selected .hand-card__frame {
+  filter: saturate(1) brightness(1.18) drop-shadow(0 0 5px #f3d58a);
+}
+.hand-card.is-pressed {
+  box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa;
+}
+.hand-card.is-dragged {
+  box-shadow: 0 0 0 2px #efdbac, 0 0 22px #e5bb6988, 0 30px 48px #10090b99;
+}
+.hand-card.is-playing { filter: brightness(calc(1 + var(--play-flash, 0))); }

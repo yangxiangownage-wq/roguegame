@@ -1,9 +1,9 @@
-export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook';
+export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave';
 export type CardDefinition = {
   title: string; cost: number; kind: '攻击' | '技能';
   description: string[]; damage?: number; block?: number; draw?: number;
   energy?: number; nextEnergy?: number; comboDraw?: boolean;
-  art: 'hero' | 'foe' | 'sword'; tone: string;
+  art: 'hero' | 'foe' | 'sword' | 'slave'; tone: string;
 };
 export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   blade: { title: '飞刃', cost: 1, kind: '攻击', description: ['造成 4 点伤害。', '抽 1 张牌。'], damage: 4, draw: 1, art: 'sword', tone: 'crimson' },
@@ -11,11 +11,12 @@ export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   slash: { title: '海盗斩击', cost: 2, kind: '攻击', description: ['造成 8 点伤害。', '本回合打出过其他攻击牌，', '则抽 1 张牌。'], damage: 8, comboDraw: true, art: 'foe', tone: 'crimson' },
   mist: { title: '雾影步', cost: 0, kind: '技能', description: ['获得 6 点格挡。', '下回合额外获得 1 点能量。'], block: 6, nextEnergy: 1, art: 'hero', tone: 'teal' },
   hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['造成 5 点伤害。', '获得 1 点能量。'], damage: 5, energy: 1, art: 'sword', tone: 'amber' },
+  slave: { title: '奴隶', cost: 1, kind: '技能', description: ['放入 1 个剑标记。'], art: 'slave', tone: 'crimson' },
 };
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
 export type PlayResult = { ok: boolean; message: string; damage: number; block: number };
-const STARTING_DECK: CardKey[] = ['blade', 'leap', 'slash', 'mist', 'hook', 'blade', 'leap', 'slash', 'blade', 'leap', 'slash', 'hook'];
+const STARTING_DECK: CardKey[] = ['slave', 'blade', 'leap', 'slash', 'mist', 'hook', 'blade', 'leap', 'slash', 'blade', 'leap', 'slash', 'hook'];
 
 /** Pure combat state. Animation timing lives in BattleView, never in the rules. */
 export class Battle {
