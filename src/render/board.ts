@@ -224,13 +224,15 @@ export class StoneBoard {
     this.setPiece(col, row, kind, delay);
   }
 
-  /** Hand off the held sprite to the board on its exact arrival frame. */
+  /** Stamp the placed piece into its cell as the card lands. */
   revealPlacedPiece(col: number, row: number): void {
     const fx = this.fx.get(cellKey(col, row));
     if (!fx?.iconOn) return;
     fx.iconDelay = 0;
-    fx.iconT = 1;
-    fx.popT = 99;
+    fx.iconT = 0;
+    fx.popT = 0;
+    fx.squash = Math.max(fx.squash, 0.55);
+    fx.wantSquash = 0;
   }
 
   /** Gold mines are already on the board when the battle opens. */

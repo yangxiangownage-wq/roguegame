@@ -1,5 +1,3 @@
-import { PIECE_ART } from '@/config/pieces';
-import { ICON_FRAC } from '@/render/radialDissolve';
 import { Battle, CARD_DEFS, type BattleCard } from '@/game/battle';
 import type { StoneBoard } from '@/render/board';
 import { battleLayout, boardTarget, isBoardArea } from '@/config/battleLayout';
@@ -9,9 +7,9 @@ import './battle.css';
 
 type Pose = { x: number; y: number; angle: number; scale: number };
 type CardNode = {
-  card: BattleCard; element: HTMLButtonElement; preview: HTMLDivElement; morph: number; pose: Pose;
+  card: BattleCard; element: HTMLButtonElement; pose: Pose;
   vx: number; vy: number; va: number; vs: number;
-  destination?: { x: number; y: number; size: number; col: number; row: number };
+  destination?: { x: number; y: number; scale: number; col: number; row: number };
   landed?: boolean;
   origin?: Pose;
   press: number; release: number;
@@ -21,12 +19,8 @@ type CardNode = {
 const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png?v=2' };
 const DRAW_POSE: Pose = { x: 245, y: 965, angle: -24, scale: 0.32 };
 const DISCARD_POSE: Pose = { x: 1590, y: 965, angle: 24, scale: 0.32 };
-const PLAY_FLIGHT = 0.34;
-const CARD_MORPH_SEC = 0.34;
-const morphPhase = (t: number, start: number, end: number): number => {
-  const u = Math.max(0, Math.min(1, (t - start) / (end - start)));
-  return u * u * (3 - 2 * u);
-};
+const PLAY_FLIGHT = 0.36;
+const PLAY_SETTLE = 0.12;
 const DISCARD_FLIGHT = 0.48;
 const DISCARD_STAGGER = 0.04;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -157,7 +151,7 @@ export class BattleView {
     element.style.pointerEvents = 'none';
     const placed = def.art === 'slave' ? '奴隶' : '剑标记';
     element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，向空格放入 1 个${placed}。`);
-    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">填格</span><span class="hand-card__description">放入 1 个${placed}。</span><span class="hand-card__gather" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>`;
+    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">填格</span><span class="hand-card__description">放入 1 个${placed}。</span>`;
     element.addEventListener('pointerenter', () => { if (this.expanded && !this.drag && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('focus', () => { if (this.expanded && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('blur', () => { if (!this.drag && this.hover === card.id) this.hover = null; });
@@ -177,13 +171,8 @@ export class BattleView {
       this.hover = card.id;
       this.selected = null;
     });
-    const preview = document.createElement('div');
-    preview.className = 'placement-piece';
-    preview.setAttribute('aria-hidden', 'true');
-    const pieceArt = PIECE_ART[def.art === 'slave' ? 'slave' : 'mark'];
-    preview.innerHTML = `<span class="placement-piece__halo"></span><img class="placement-piece__image" src="${pieceArt}" alt="" draggable="false"><span class="placement-piece__spark"></span>`;
-    this.hand.append(element, preview);
-    const node: CardNode = { card, element, preview, morph: 0, pose: { ...this.drawPose() }, vx: 0, vy: 0, va: 0, vs: 0, state: 'hand', press: 0, release: 1, elapsed: 0, delay, layer: 0 };
+    this.hand.append(element);
+    const node: CardNode = { card, element, pose: { ...this.drawPose() }, vx: 0, vy: 0, va: 0, vs: 0, state: 'hand', press: 0, release: 1, elapsed: 0, delay, layer: 0 };
     this.nodes.set(card.id, node);
     return node;
   }
@@ -239,7 +228,8 @@ export class BattleView {
     this.placementTarget.style.height = `${target.size}px`;
     const occupied = this.board.hasPiece(target.col, target.row);
     this.placementTarget.classList.toggle('is-invalid', occupied);
-    this.placementTarget.textContent = occupied ? '已占用' : '放置';
+    this.placementTarget.classList.toggle('is-valid', !occupied);
+    this.placementTarget.textContent = occupied ? '已占用' : '';
   }
 
   private syncMinePreview(): void {
@@ -288,7 +278,6 @@ export class BattleView {
   }
   private removeVisual(node: CardNode): void {
     node.element.remove();
-    node.preview.remove();
   }
 
   private pointerUp(event: PointerEvent): void {
@@ -385,7 +374,13 @@ export class BattleView {
     this.board.place(target.col, target.row, this.reduced.matches ? 0 : PLAY_FLIGHT, piece);
     node.origin = { ...node.pose };
     node.element.classList.add('is-playing');
-    node.destination = { x: target.x + target.size / 2, y: target.y + target.size / 2, size: target.size * ICON_FRAC, col: target.col, row: target.row };
+    node.destination = {
+      x: target.x + target.size / 2,
+      y: target.y + target.size / 2,
+      scale: Math.min(0.42, target.size * 0.82 / 300),
+      col: target.col,
+      row: target.row,
+    };
     node.state = 'play';
     node.elapsed = 0;
     node.element.style.pointerEvents = 'none';
@@ -588,56 +583,42 @@ export class BattleView {
       if (this.expanded && hoverIndex >= 0 && id !== this.hover) target.x += Math.sign(index - hoverIndex) * 24 * (this.settings.handCardSpread / 100);
       if (this.expanded && (id === this.hover || pressed)) target = { ...target, y: 813 - lift, angle: 0, scale: 1.08 };
       const dragging = this.drag?.id === id && this.drag.moved;
-      const previewWanted = node.state === 'play' || (dragging && this.drag!.condensed);
-      const morphTarget = previewWanted ? 1 : 0;
-      node.morph = this.reduced.matches ? morphTarget
-        : Math.max(0, Math.min(1, node.morph + (previewWanted ? 1 : -1) * dt / CARD_MORPH_SEC));
-      const charge = morphPhase(node.morph, 0, 0.22);
-      const gather = morphPhase(node.morph, 0.12, 0.62);
-      const shell = 1 - morphPhase(node.morph, 0.08, 0.32);
-      const sourceArt = 1 - morphPhase(node.morph, 0.42, 0.60);
-      const collapse = morphPhase(node.morph, 0.28, 0.60);
-      const extract = morphPhase(node.morph, 0.32, 1);
-      // Never crossfade two recognizable images: a brief light bridges the handoff.
-      const reveal = morphPhase(node.morph, 0.64, 1);
-      const bridge = morphPhase(node.morph, 0.40, 0.60) * (1 - morphPhase(node.morph, 0.68, 0.94));
-      const previewAlpha = Math.max(reveal, bridge);
-      const heldSize = Math.min(76, this.settings.tileSize * layout.scale * ICON_FRAC * 0.62);
+      const overCell = dragging && this.drag!.condensed && this.target !== null;
+      const occupied = overCell && this.board.hasPiece(this.target!.col, this.target!.row);
+      node.element.classList.toggle('is-drop-valid', !!overCell && !occupied);
+      node.element.classList.toggle('is-drop-invalid', !!overCell && !!occupied);
       if (dragging) target = {
         x: this.drag!.x,
-        y: this.drag!.y - mix(55, heldSize / 2 + 18, node.morph),
-        angle: mix(Math.max(-12, Math.min(12, node.vx * 0.018)), 0, node.morph),
-        scale: 0.65,
+        y: this.drag!.y - 55,
+        angle: Math.max(-10, Math.min(10, node.vx * 0.016)),
+        scale: overCell ? 0.34 : 0.56,
       };
       node.press += ((pressed ? 1 : 0) - node.press) * (1 - Math.exp(-24 * dt));
       node.release = Math.min(1, node.release + dt / 0.28);
       const rebound = Math.sin(node.release * Math.PI) * (1 - node.release) * 0.065;
       let scripted = false;
-      let flightOpacity = 1;
-      let previewSize = heldSize;
+      let fold = 0;
       if (node.state === 'play') {
-        node.element.style.opacity = '1';
         scripted = true;
-        const t = this.reduced.matches ? 1 : Math.max(0, node.elapsed);
+        const t = this.reduced.matches ? PLAY_FLIGHT + PLAY_SETTLE : Math.max(0, node.elapsed);
         const origin = node.origin ?? node.pose;
         const destination = node.destination!;
         const travel = Math.min(1, t / PLAY_FLIGHT);
         const u = travel * travel * (3 - 2 * travel);
-        const settle = Math.min(1, Math.max(0, t - PLAY_FLIGHT) / 0.18);
+        const settle = Math.min(1, Math.max(0, t - PLAY_FLIGHT) / PLAY_SETTLE);
+        fold = ease(settle);
         target = {
           x: mix(origin.x, destination.x, u),
-          y: mix(origin.y, destination.y, u) - Math.sin(travel * Math.PI) * 18,
+          y: mix(origin.y, destination.y, u) - Math.sin(travel * Math.PI) * 24,
           angle: mix(origin.angle, 0, u),
-          scale: mix(origin.scale, 0.08, u),
+          scale: mix(origin.scale, destination.scale, u),
         };
-        flightOpacity = 1 - ease(settle);
-        previewSize = mix(heldSize, destination.size, u);
         if (travel >= 1 && !node.landed) {
           this.board.revealPlacedPiece(destination.col, destination.row);
           node.landed = true;
         }
-        node.element.style.setProperty('--play-flash', String(Math.sin(travel * Math.PI) * 0.32));
-        if (t > PLAY_FLIGHT + 0.18) {
+        node.element.style.opacity = String(1 - fold);
+        if (t > PLAY_FLIGHT + PLAY_SETTLE) {
           this.removeVisual(node);
           if (this.nodes.get(id) === node) this.nodes.delete(id);
           continue;
@@ -684,36 +665,7 @@ export class BattleView {
       const p = node.pose;
       const tactileScale = this.reduced.matches || scripted ? 1 : 1 - node.press * 0.08 + rebound;
       const cardScale = this.settings.handCardScale / 100;
-      // Keep the outgoing art, bridging light, and incoming sprite on one moving anchor.
-      // The art's center is (100, 91), i.e. 59px above the card center.
-      const renderedScale = p.scale * tactileScale * cardScale;
-      const anchorOffset = -59 * renderedScale * (1 - extract);
-      const radians = p.angle * Math.PI / 180;
-      const previewX = p.x - Math.sin(radians) * anchorOffset;
-      const previewY = p.y + Math.cos(radians) * anchorOffset;
-      const spriteSize = mix(184 * renderedScale, previewSize, extract);
-      node.element.classList.toggle('is-transmuting', node.morph > 0 && node.morph < 1);
-      node.element.style.setProperty('--morph-charge', String(charge * (1 - reveal)));
-      node.element.style.setProperty('--morph-gather', String(gather));
-      node.element.style.setProperty('--morph-shell', String(shell));
-      node.element.style.setProperty('--morph-art', String(sourceArt));
-      node.element.style.setProperty('--morph-art-scale', String(mix(1, 0.08, collapse)));
-      node.element.style.setProperty('--morph-art-shift', `${59 * extract}px`);
-      node.element.style.setProperty('--morph-sparks', String(Math.sin(gather * Math.PI)));
-      // The held sprite uses board scale, independently of the hand card size.
-      // Keep the captured button alive throughout the morph for reliable pointerup.
-      node.element.style.opacity = String(Number(node.element.style.opacity || 1) * (1 - morphPhase(node.morph, 0.86, 1)) * flightOpacity);
-      node.preview.style.opacity = String(previewAlpha * flightOpacity);
-      node.preview.style.width = `${spriteSize}px`;
-      node.preview.style.height = `${spriteSize}px`;
-      node.preview.style.setProperty('--gather-glow', String(bridge));
-      node.preview.style.setProperty('--piece-reveal', String(previewAlpha > 0 ? reveal / previewAlpha : 0));
-      node.preview.style.setProperty('--piece-emerge', String(mix(0.18, 1, reveal)));
-      node.preview.style.transform = `translate3d(${previewX - spriteSize / 2}px, ${previewY - spriteSize / 2}px, 0) rotate(${p.angle * (1 - extract)}deg)`;
-      node.preview.classList.toggle('is-landed', !!node.landed);
-      node.preview.classList.toggle('is-active', node.morph > 0.01);
-      node.preview.classList.toggle('is-invalid', !!dragging && !!this.target && this.board.hasPiece(this.target.col, this.target.row));
-      node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150}px, 0) rotate(${p.angle}deg) scale(${p.scale * tactileScale * cardScale})`;
+      node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150}px, 0) rotate(${p.angle}deg) scale(${p.scale * tactileScale * cardScale}) scaleY(${1 - fold * 0.92})`;
       node.element.style.zIndex = String(node.state === 'discard' ? 30 + node.layer : node.state !== 'hand' ? 40 : active ? 30 : index + 1);
       node.element.classList.toggle('is-selected', active && node.state === 'hand');
       node.element.classList.toggle('is-pressed', !!pressed);
