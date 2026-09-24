@@ -1,7 +1,7 @@
 /** UNO-style paint dissolve, radial from tile center to edges. */
 
 export const DISSOLVE_MASK = 56;
-export const DISSOLVE_SEC = 0.52;
+export const DISSOLVE_SEC = 0.4;
 export const DISSOLVE_STAGGER_SEC = 0.1;
 export const ICON_FRAC = 1;
 

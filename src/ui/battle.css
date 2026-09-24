@@ -149,6 +149,7 @@
 }
 .is-hand-open .battle-hand-toggle::before { transform: rotate(225deg); margin-bottom: 1px; }
 .battle-hand-toggle:hover { background: #493626; color: #fff0cb; }
+.battle-ui.is-placement-animating .battle-hand-toggle { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .battle-hand-surface, .battle-hand-toggle, .battle-hand-toggle::before { transition: none; }
 }
@@ -163,6 +164,9 @@
 .hand-card.is-selected .hand-card__frame {
   filter: saturate(1) brightness(1.18) drop-shadow(0 0 5px #f3d58a);
 }
+.hand-card.is-unaffordable { cursor: not-allowed; }
+.hand-card.is-unaffordable.is-selected { box-shadow: 0 10px 22px #090506aa; }
+.hand-card.is-unaffordable.is-selected .hand-card__frame { filter: saturate(.65) brightness(.84); }
 .hand-card.is-pressed {
   box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa;
 }
