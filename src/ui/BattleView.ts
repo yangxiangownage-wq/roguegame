@@ -23,6 +23,9 @@ const PLAY_FLIGHT = 0.34;
 const PLAY_SETTLE = 0.14;
 const DISCARD_FLIGHT = 0.48;
 const DISCARD_STAGGER = 0.04;
+const DEAL_FLIGHT = 0.55;
+const CARD_SPRING_STIFFNESS = 260;
+const CARD_SPRING_DAMPING = 25;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 
@@ -56,6 +59,7 @@ export class BattleView {
   private noticeTimer = 0;
   private resultTimer = 0;
   private turnPause = 0;
+  private revealBeforeDiscard = 0;
   private turnCue: 'none' | 'enemy-strike' | 'player-deal' = 'none';
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -116,26 +120,35 @@ export class BattleView {
   }
 
   private toggleHand(): void {
-    if (this.placementAnimating) return;
+    if (this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing()) return;
     const next = !this.expanded;
     this.cancel();
     this.setExpanded(next);
   }
 
   private setExpanded(expanded: boolean): void {
+    if (!expanded && (this.revealBeforeDiscard > 0 || this.isDealing())) expanded = true;
     this.expanded = expanded;
     this.root.classList.toggle('is-hand-open', expanded);
     this.handToggle.setAttribute('aria-expanded', String(expanded));
+    this.handToggle.disabled = this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
     this.handToggle.textContent = `${expanded ? '收起手牌' : '展开手牌'} · ${this.battle.hand.length} 张`;
     this.handSurface.style.pointerEvents = expanded ? 'auto' : 'none';
     if (!expanded && this.hand.contains(document.activeElement)) this.handToggle.focus({ preventScroll: true });
     for (const node of this.nodes.values()) {
-      const interactive = expanded && node.state === 'hand' && this.battle.phase === 'player';
+      const interactive = expanded && this.revealBeforeDiscard === 0 && node.state === 'hand' && this.battle.phase === 'player';
       node.element.tabIndex = interactive ? 0 : -1;
       node.element.setAttribute('aria-hidden', String(!interactive));
       // Preserve the captured card's pointer stream while withdrawing the rest.
       if (!interactive && this.drag?.id !== node.card.id) node.element.style.pointerEvents = 'none';
     }
+  }
+
+  private isDealing(): boolean {
+    if (this.reduced.matches) return false;
+    return [...this.nodes.values()].some(node =>
+      node.state === 'hand' && node.elapsed < node.delay + DEAL_FLIGHT,
+    );
   }
 
   private point(event: PointerEvent) { return clientToDesign(event.clientX, event.clientY, computeDesignFit()); }
@@ -144,6 +157,43 @@ export class BattleView {
     this.live.textContent = text;
     this.noticeTimer = 4;
     this.notice.classList.add('is-visible');
+  }
+  private insufficientEnergy(id: number, cost: number, announce = true): void {
+    const node = this.nodes.get(id);
+    this.hover = id;
+    if (announce) this.message(`能量不足，需要 ${cost} 点能量`);
+    if (this.reduced.matches) return;
+    node?.element.animate(
+      [
+        { translate: '0 0' },
+        { translate: '-6px 0' },
+        { translate: '5px 0' },
+        { translate: '-3px 0' },
+        { translate: '0 0' },
+      ],
+      { duration: 260, easing: 'ease-out' },
+    );
+    node?.element.querySelector<HTMLElement>('.hand-card__cost')?.animate(
+      [{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }],
+      { duration: 260, easing: 'ease-out' },
+    );
+    this.energy.animate(
+      [
+        {
+          filter: 'brightness(1)',
+          boxShadow: 'inset 0 0 0 5px #191b17, inset 0 0 0 6px #79623e, 0 12px 24px #150b12aa',
+        },
+        {
+          filter: 'brightness(1.2)',
+          boxShadow: 'inset 0 0 0 5px #191b17, inset 0 0 0 6px #d87565, 0 0 24px #d8756566',
+        },
+        {
+          filter: 'brightness(1)',
+          boxShadow: 'inset 0 0 0 5px #191b17, inset 0 0 0 6px #79623e, 0 12px 24px #150b12aa',
+        },
+      ],
+      { duration: 380, easing: 'ease-out' },
+    );
   }
   private createNode(card: BattleCard, delay: number): CardNode {
     const def = CARD_DEFS[card.key];
@@ -158,12 +208,11 @@ export class BattleView {
     element.addEventListener('focus', () => { if (this.expanded && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('blur', () => { if (!this.drag && this.hover === card.id) this.hover = null; });
     element.addEventListener('pointerdown', event => {
-      if (!this.expanded || event.button !== 0 || this.battle.phase !== 'player' || !this.pileDialog.hidden) return;
+      if (!this.expanded || this.revealBeforeDiscard > 0 || event.button !== 0 || this.battle.phase !== 'player' || !this.pileDialog.hidden) return;
       if (this.battle.energy < def.cost) {
         event.preventDefault();
         event.stopPropagation();
-        this.hover = card.id;
-        this.message(`能量不足，需要 ${def.cost} 点能量`);
+        this.insufficientEnergy(card.id, def.cost);
         return;
       }
       event.preventDefault();
@@ -178,7 +227,7 @@ export class BattleView {
     element.addEventListener('click', event => {
       if (!this.expanded || event.detail !== 0 || this.nodes.get(card.id)?.state !== 'hand') return;
       if (this.battle.energy < def.cost) {
-        this.message(`能量不足，需要 ${def.cost} 点能量`);
+        this.insufficientEnergy(card.id, def.cost);
         return;
       }
       this.hover = card.id;
@@ -208,17 +257,17 @@ export class BattleView {
       node.element.classList.toggle('is-unaffordable', unavailable);
       node.element.setAttribute('aria-disabled', String(b.phase !== 'player' || unavailable));
       node.element.title = unavailable ? `能量不足，需要 ${def.cost} 点能量` : '';
-      node.element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，向空格放入 1 个${def.art === 'slave' ? '奴隶' : '剑标记'}。${unavailable ? `能量不足，需要 ${def.cost} 点能量。` : ''}`);
+      node.element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量。${def.description.join(' ')}${unavailable ? `能量不足，需要 ${def.cost} 点能量。` : ''}`);
       node.element.tabIndex = this.expanded && b.phase === 'player' && node.state === 'hand' ? 0 : -1;
     }
     this.setExpanded(this.expanded);
-    this.energy.innerHTML = `<strong>${b.energy}<small> / ${b.turnEnergy}</small></strong><span>能量${b.nextEnergy ? ` · 下回合 +${b.nextEnergy}` : ''}</span>`;
-    this.energy.setAttribute('aria-label', `剩余 ${b.energy} 点能量`);
+    this.energy.innerHTML = `<strong>${b.energy}<small> / ${b.turnEnergy}</small></strong><span>上限 ${b.energyCap}${b.nextEnergy ? ` · 下回合 +${b.nextEnergy}` : ''}</span>`;
+    this.energy.setAttribute('aria-label', `剩余 ${b.energy} 点能量，本回合上限 ${b.turnEnergy}，永久能量上限 ${b.energyCap}`);
     this.drawPile.innerHTML = `<span class="battle-pile__back"></span><strong>${b.drawPile.length}</strong><span>抽牌堆</span>`;
     this.discardPile.innerHTML = `<span class="battle-pile__back"></span><strong>${b.discardPile.length}</strong><span>弃牌堆</span>`;
     this.drawPile.setAttribute('aria-label', `查看抽牌堆，${b.drawPile.length} 张`);
     this.discardPile.setAttribute('aria-label', `查看弃牌堆，${b.discardPile.length} 张`);
-    this.end.disabled = b.phase !== 'player' || this.placementAnimating;
+    this.end.disabled = b.phase !== 'player' || this.placementAnimating || this.revealBeforeDiscard > 0;
     this.end.textContent = b.phase === 'enemy' ? '敌人行动中' : '结束回合';
     this.turn.innerHTML = `<span>第 ${b.turn} 回合</span><small>${b.phase === 'player' ? '你的回合' : b.phase === 'enemy' ? '敌人回合' : '战斗结束'}</small>`;
     this.intent.innerHTML = `<span>攻击意图</span><strong>${b.intent}</strong><small>伤害</small>`;
@@ -279,10 +328,16 @@ export class BattleView {
     if (!this.drag.moved && Math.hypot(p.x - this.drag.startX, p.y - this.drag.startY) > 10) {
       this.drag.moved = true;
     }
-    // Hysteresis avoids flickering between card and piece near the pickup position.
+    // Keep a wide dead zone so small pointer movements near the board rim do not
+    // repeatedly expand and tuck the hand.
     const distance = Math.hypot(p.x - this.drag.startX, p.y - this.drag.startY);
-    this.drag.condensed = distance > (this.drag.condensed ? 32 : 60);
-    if (this.expanded === this.drag.condensed) this.setExpanded(!this.drag.condensed);
+    if (!this.drag.condensed && distance >= 72) {
+      this.drag.condensed = true;
+      this.setExpanded(false);
+    } else if (this.drag.condensed && distance <= 18) {
+      this.drag.condensed = false;
+      this.setExpanded(true);
+    }
     if (this.drag.condensed) this.previewTarget(p.x, p.y);
     else {
       this.target = null;
@@ -359,7 +414,7 @@ export class BattleView {
   /** Placement consumes the click before the board handles ordinary hover feedback. */
   targetClick(x: number, y: number): boolean {
     if (x < 0 || x > 1920 || y < 0 || y > 1080 || !this.pileDialog.hidden || !this.result.hidden) return false;
-    if (this.placementAnimating) return true;
+    if (this.placementAnimating || this.revealBeforeDiscard > 0) return true;
     if (!isBoardArea(this.settings, x, y)) {
       this.toggleHand();
       return true;
@@ -380,7 +435,8 @@ export class BattleView {
     const result = this.battle.placeCard(id);
     if (!result.ok) {
       this.rejectPlacement(id, result.message);
-      node.element.animate([{ translate: '-8px 0' }, { translate: '7px 0' }, { translate: '0 0' }], { duration: this.reduced.matches ? 1 : 240 });
+      if (result.message.startsWith('能量不足')) this.insufficientEnergy(id, CARD_DEFS[node.card.key].cost, false);
+      else if (!this.reduced.matches) node.element.animate([{ translate: '-8px 0' }, { translate: '7px 0' }, { translate: '0 0' }], { duration: 240 });
       return;
     }
     // Clear the pending target without tucking the rest of the hand.
@@ -408,9 +464,21 @@ export class BattleView {
     this.sync();
   }
   private endTurn(): void {
-    if (this.placementAnimating || !this.pileDialog.hidden || !this.result.hidden || this.battle.phase !== 'player' || this.turnCue !== 'none') return;
+    if (this.placementAnimating || this.revealBeforeDiscard > 0 || !this.pileDialog.hidden || !this.result.hidden || this.battle.phase !== 'player' || this.turnCue !== 'none') return;
     this.cancel(false);
     const leaving = [...this.nodes.values()].filter(node => node.state === 'hand');
+    if (!this.expanded && leaving.length && !this.reduced.matches) {
+      // Bring tucked cards back into view before asking them to fly to discard.
+      this.revealBeforeDiscard = DEAL_FLIGHT;
+      this.setExpanded(true);
+      this.end.disabled = true;
+      return;
+    }
+    this.finishEndTurn(leaving);
+  }
+
+  private finishEndTurn(leaving = [...this.nodes.values()].filter(node => node.state === 'hand')): void {
+    if (this.battle.phase !== 'player') return;
     leaving.sort((a, b) => this.battle.hand.findIndex(card => card.id === a.card.id) - this.battle.hand.findIndex(card => card.id === b.card.id));
     leaving.forEach((node, i) => {
       // Fly from the visible pose, including a partially collapsed or hovered hand.
@@ -422,9 +490,10 @@ export class BattleView {
       node.element.style.pointerEvents = 'none';
       node.element.setAttribute('aria-hidden', 'true');
     });
-    this.battle.endTurn();
+    const mined = this.board.mineWithSlaves(this.settings);
+    this.battle.endTurn(mined);
     this.sync();
-    this.message('敌人回合');
+    this.message(mined > 0 ? `挖矿完成：能量上限 +${mined}（下回合生效）` : '敌人回合');
     this.turnCue = 'enemy-strike';
     this.turnPause = this.reduced.matches ? 0.05
       : leaving.length ? DISCARD_FLIGHT + (leaving.length - 1) * DISCARD_STAGGER + 0.08 : 0.08;
@@ -488,6 +557,7 @@ export class BattleView {
       this.nodes.clear();
       this.departing.length = 0;
       this.resultTimer = 0;
+      this.revealBeforeDiscard = 0;
       this.turnPause = 0;
       this.turnCue = 'none';
       this.battle.reset();
@@ -500,6 +570,7 @@ export class BattleView {
     restart.focus();
   }
   private showPile(kind: 'draw' | 'discard'): void {
+    if (this.revealBeforeDiscard > 0) return;
     this.cancel();
     const pile = kind === 'draw' ? this.battle.drawPile : this.battle.discardPile;
     const counts = new Map<string, number>();
@@ -575,6 +646,13 @@ export class BattleView {
   update(dt: number): void {
     if (this.resultTimer > 0) { this.resultTimer -= dt; if (this.resultTimer <= 0) this.showResult(); }
     if (this.noticeTimer > 0) { this.noticeTimer -= dt; if (this.noticeTimer <= 0) this.notice.classList.remove('is-visible'); }
+    if (this.revealBeforeDiscard > 0) {
+      this.revealBeforeDiscard -= dt;
+      if (this.revealBeforeDiscard <= 0) {
+        this.revealBeforeDiscard = 0;
+        this.finishEndTurn();
+      }
+    }
     if (this.turnPause > 0) { this.turnPause -= dt; if (this.turnPause <= 0) this.advanceTurnCue(); }
     this.layoutHud();
     const layout = battleLayout(this.settings);
@@ -609,7 +687,9 @@ export class BattleView {
         x: this.drag!.x,
         y: this.drag!.y - 55,
         angle: Math.max(-10, Math.min(10, node.vx * 0.016)),
-        scale: overCell ? 0.34 : 0.56,
+        // Keep the card at a steady size while crossing tile edges and gaps.
+        // The placement flight handles the final shrink into the destination tile.
+        scale: this.drag!.condensed ? 0.48 : 0.56,
       };
       node.press += ((pressed ? 1 : 0) - node.press) * (1 - Math.exp(-24 * dt));
       node.release = Math.min(1, node.release + dt / 0.28);
@@ -647,20 +727,15 @@ export class BattleView {
           continue;
         }
       } else if (node.state === 'discard') {
-        scripted = true;
-        const t = this.reduced.matches ? 1 : Math.max(0, Math.min(1, node.elapsed / DISCARD_FLIGHT));
-        const origin = node.origin ?? node.pose;
-        const u = ease(t);
-        const pile = this.discardPose();
-        target = {
-          x: mix(origin.x, pile.x, u),
-          y: mix(origin.y, pile.y, u) - Math.sin(Math.PI * t) * 42,
-          angle: mix(origin.angle, pile.angle, u),
-          scale: mix(origin.scale, pile.scale, u),
-        };
-        // Fade on approach, without waiting for a spring to settle at the pile.
-        node.element.style.opacity = String(1 - ease(Math.max(0, (t - 0.7) / 0.3)));
-        if (t >= 1) {
+        const elapsed = this.reduced.matches ? DISCARD_FLIGHT : Math.max(0, node.elapsed);
+        // Use the same spring as a card being dealt into the hand. Hold each
+        // card at its captured pose until its stagger begins.
+        target = node.elapsed < 0 && !this.reduced.matches
+          ? node.origin ?? node.pose
+          : this.discardPose();
+        const progress = Math.min(1, elapsed / DISCARD_FLIGHT);
+        node.element.style.opacity = String(1 - ease(Math.max(0, (progress - 0.7) / 0.3)));
+        if (progress >= 1) {
           this.removeVisual(node);
           if (this.nodes.get(id) === node) this.nodes.delete(id);
           continue;
@@ -678,8 +753,8 @@ export class BattleView {
           if (this.reduced.matches || scripted) { node.pose[key] = target[key]; node[velocity] = 0; }
           else {
             const dragging = this.drag?.id === id;
-            const stiffness = dragging ? 460 : 260;
-            const damping = dragging ? 32 : 25;
+            const stiffness = dragging ? 460 : CARD_SPRING_STIFFNESS;
+            const damping = dragging ? 32 : CARD_SPRING_DAMPING;
             node[velocity] += ((target[key] - node.pose[key]) * stiffness - node[velocity] * damping) * step;
             node.pose[key] += node[velocity] * step;
           }
@@ -697,5 +772,6 @@ export class BattleView {
     for (let i = this.departing.length - 1; i >= 0; i--) {
       if (!this.departing[i]!.element.isConnected) this.departing.splice(i, 1);
     }
+    this.handToggle.disabled = this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
   }
 }

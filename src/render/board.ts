@@ -245,6 +245,23 @@ export class StoneBoard {
     }
   }
 
+  /** Each revealed slave beside a mine digs once at the end of the turn. */
+  mineWithSlaves(s: BoardSettings): number {
+    let mined = 0;
+    for (let row = 0; row < s.rows; row++) {
+      for (let col = 0; col < s.cols; col++) {
+        const worker = this.fx.get(cellKey(col, row));
+        if (!worker?.iconOn || worker.kind !== 'slave') continue;
+        const mine = this.aimMine(col, row, s);
+        if (!mine) continue;
+        worker.popT = 0;
+        this.fx.get(cellKey(mine.col, mine.row))!.popT = 0;
+        mined++;
+      }
+    }
+    return mined;
+  }
+
   private setPiece(col: number, row: number, kind: PieceKind, delay: number): void {
     const fx = this.fxOf({ col, row });
     fx.iconOn = true;

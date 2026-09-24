@@ -11,7 +11,7 @@ export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   slash: { title: '海盗斩击', cost: 2, kind: '攻击', description: ['造成 8 点伤害。', '本回合打出过其他攻击牌，', '则抽 1 张牌。'], damage: 8, comboDraw: true, art: 'foe', tone: 'crimson' },
   mist: { title: '雾影步', cost: 0, kind: '技能', description: ['获得 6 点格挡。', '下回合额外获得 1 点能量。'], block: 6, nextEnergy: 1, art: 'hero', tone: 'teal' },
   hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['造成 5 点伤害。', '获得 1 点能量。'], damage: 5, energy: 1, art: 'sword', tone: 'amber' },
-  slave: { title: '奴隶', cost: 1, kind: '技能', description: ['放入 1 个奴隶。'], art: 'slave', tone: 'crimson' },
+  slave: { title: '奴隶', cost: 1, kind: '技能', description: ['放入 1 个奴隶。', '回合结束时，若相邻金矿则挖矿，能量上限 +1。'], art: 'slave', tone: 'crimson' },
 };
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
@@ -30,6 +30,7 @@ export class Battle {
   block = 0;
   energy = 3;
   turnEnergy = 3;
+  energyCap = 3;
   nextEnergy = 0;
   turn = 1;
   attacksPlayed = 0;
@@ -42,7 +43,9 @@ export class Battle {
     this.heroHp = this.heroMaxHp;
     this.foeHp = this.foeMaxHp;
     this.block = this.nextEnergy = this.attacksPlayed = 0;
-    this.energy = this.turnEnergy = 3;
+    this.energyCap = 3;
+    this.energy = this.turnEnergy = this.energyCap + this.nextEnergy;
+    this.nextEnergy = 0;
     this.turn = 1;
     this.phase = 'player';
     this.discardPile = [];
@@ -86,7 +89,8 @@ export class Battle {
     if (this.phase !== 'player') return false;
     this.discardPile.push(...this.hand.splice(0));
     this.turn++;
-    this.energy = this.turnEnergy = 3;
+    this.energy = this.turnEnergy = this.energyCap + this.nextEnergy;
+    this.nextEnergy = 0;
     this.draw(5);
     this.revision++;
     return true;
@@ -114,8 +118,9 @@ export class Battle {
     this.revision++;
     return { ok: true, message: def.title, damage, block: def.block ?? 0 };
   }
-  endTurn(): boolean {
+  endTurn(minedEnergy = 0): boolean {
     if (this.phase !== 'player') return false;
+    this.energyCap += Math.max(0, Math.floor(minedEnergy));
     this.discardPile.push(...this.hand.splice(0));
     this.phase = 'enemy';
     this.revision++;
@@ -135,7 +140,7 @@ export class Battle {
   beginPlayerTurn(): boolean {
     if (this.phase !== 'enemy' || this.heroHp <= 0) return false;
     this.turn++;
-    this.energy = this.turnEnergy = 3 + this.nextEnergy;
+    this.energy = this.turnEnergy = this.energyCap + this.nextEnergy;
     this.nextEnergy = this.attacksPlayed = 0;
     this.phase = 'player';
     this.draw(5);
