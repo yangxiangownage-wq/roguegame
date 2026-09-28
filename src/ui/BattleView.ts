@@ -24,13 +24,22 @@ const PLAY_FLIGHT = 0.34;
 const PLAY_SETTLE = 0.14;
 const DISCARD_FLIGHT = 0.42;
 const DISCARD_STAGGER = 0.035;
-const DEAL_FLIGHT = 0.42;
-const DEAL_STAGGER = 0.055;
+const DEAL_FLIGHT = 0.48;
+const DEAL_STAGGER = 0.065;
 const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+const springResponse = (time: number) => {
+  const omega = Math.sqrt(CARD_SPRING_STIFFNESS);
+  const dampingRatio = CARD_SPRING_DAMPING / (2 * omega);
+  const dampedOmega = omega * Math.sqrt(1 - dampingRatio * dampingRatio);
+  return 1 - Math.exp(-dampingRatio * omega * time) * (
+    Math.cos(dampedOmega * time) + dampingRatio / Math.sqrt(1 - dampingRatio * dampingRatio) * Math.sin(dampedOmega * time)
+  );
+};
+const dealProgress = (progress: number) => springResponse(progress * DEAL_FLIGHT) / springResponse(DEAL_FLIGHT);
 
 export class BattleView {
   readonly battle = new Battle();
@@ -769,13 +778,13 @@ export class BattleView {
         if (dealElapsed < 0) continue;
         if (!this.reduced.matches && !node.dealt) {
           const progress = Math.min(1, dealElapsed / DEAL_FLIGHT);
-          const u = smooth(progress);
+          const u = dealProgress(progress);
           const origin = node.origin ?? this.drawPose();
           scripted = true;
           target = {
             x: mix(origin.x, target.x, u),
-            y: mix(origin.y, target.y, u) - Math.sin(u * Math.PI) * 22,
-            angle: mix(origin.angle, target.angle, u),
+            y: mix(origin.y, target.y, u) - Math.sin(progress * Math.PI) * 30,
+            angle: mix(origin.angle, target.angle, u) + Math.sin(progress * Math.PI) * 2.5,
             scale: mix(origin.scale, target.scale, u),
           };
           if (progress >= 1) node.dealt = true;
