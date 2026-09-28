@@ -1,188 +1,379 @@
 .battle-ui {
-  position: absolute; inset: 0; z-index: 3; pointer-events: none;
-  color: #f1e1bd; font-family: "PingFang SC", "Hiragino Sans GB", sans-serif;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  color: #efe2c5;
+  font-family: "PingFang SC", "Hiragino Sans GB", sans-serif;
   user-select: none;
 }
 .battle-ui::before {
-  content: ''; position: absolute; inset: 955px 0 0;
-  background: linear-gradient(transparent, rgba(13, 10, 12, .62)); pointer-events: none;
+  content: '';
+  position: absolute;
+  inset: 955px 0 0;
+  background: linear-gradient(transparent, rgba(13, 10, 12, .62));
+  pointer-events: none;
 }
-.battle-ui button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.battle-ui button:focus-visible { outline: 3px solid #f6d698; outline-offset: 6px; }
-.battle-hand { position: absolute; inset: 0; pointer-events: none; }
-.hand-card {
-  position: absolute; left: 0; top: 0; width: 200px; height: 300px; padding: 0;
-  border: 0; border-radius: 14px; background: #241b19;
-  pointer-events: auto; touch-action: none; transform-origin: center;
-  box-shadow: 0 10px 22px rgba(9, 5, 6, .75); will-change: transform;
-  text-align: center; isolation: isolate;
+.battle-ui button { color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.battle-ui button:focus-visible { outline: 2px solid #f1d99f; outline-offset: 4px; }
+
+.battle-turn {
+  position: absolute;
+  top: 15px;
+  left: 800px;
+  width: 320px;
+  padding: 8px 0 10px;
+  text-align: center;
+  text-shadow: 0 2px 6px #100d0c;
+  border-bottom: 1px solid #c4a66b66;
 }
-.hand-card__art {
-  position: absolute; inset: 8px 8px 126px; overflow: hidden;
-  border-radius: 9px 9px 0 0; background: radial-gradient(ellipse at center, #44534b, #182222);
+.battle-turn span { font: 600 22px Georgia, "PingFang SC", serif; letter-spacing: 2px; }
+.battle-turn small { margin-left: 14px; color: #cbb997; font-size: 13px; }
+.battle-notice {
+  position: absolute;
+  left: 470px;
+  top: 60px;
+  width: 980px;
+  text-align: center;
+  color: #ddcba9;
+  font-size: 15px;
+  letter-spacing: .5px;
+  opacity: 0;
+  transition: opacity .18s ease;
+  text-shadow: 0 2px 6px #100d0c;
 }
-.hand-card--crimson .hand-card__art { background: radial-gradient(ellipse at center, #743c32, #291a1c); }
-.hand-card--amber .hand-card__art { background: radial-gradient(ellipse at center, #725135, #2c211b); }
-.hand-card__art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 21%; pointer-events: none; }
-.hand-card__art::after { content: ''; position: absolute; inset: 65% 0 0; background: linear-gradient(transparent, #241b19); }
-.hand-card--amber .hand-card__art img { filter: sepia(.65) brightness(.8); transform: rotate(30deg) scale(1.25); }
-.hand-card__frame { position: absolute; inset: 0; z-index: 2; background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat; pointer-events: none; filter: saturate(.75); }
-.hand-card__cost {
-  position: absolute; top: -11px; left: -12px; z-index: 3; width: 53px; height: 53px;
-  display: grid; place-items: center;
-  background: url('/assets/cards/cost.png') center / contain no-repeat;
-  font: 700 30px Georgia, serif; text-shadow: 0 2px 3px #17100b;
+.battle-notice.is-visible { opacity: 1; }
+.battle-settlement {
+  position: absolute;
+  top: 98px;
+  left: 590px;
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  width: 740px;
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity .18s ease, transform .18s ease;
+  pointer-events: none;
 }
-.hand-card__title { position: absolute; top: 168px; left: 12px; right: 12px; font-weight: 650; font-size: 20px; letter-spacing: 1px; }
-.hand-card__kind { position: absolute; top: 199px; left: 40px; right: 40px; font-size: 11px; color: #bca681; letter-spacing: 4px; }
-.hand-card__description { position: absolute; top: 222px; left: 13px; right: 13px; font-size: 12.5px; line-height: 1.65; color: #e2d4bb; }
-.hand-card.is-unaffordable .hand-card__cost { color: #f0917c; filter: saturate(.7); }
-.hand-card.is-unaffordable .hand-card__art { filter: saturate(.5) brightness(.75); }
-.hand-card.is-dragged { cursor: grabbing; }
+.battle-settlement.is-visible { opacity: 1; transform: translateY(0); }
+.battle-settlement span {
+  padding: 6px 11px;
+  border: 1px solid #aa956b88;
+  border-radius: 999px;
+  background: #171512df;
+  color: #eee2c8;
+  font-size: 13px;
+  box-shadow: 0 3px 12px #0b0908aa;
+}
+.battle-settlement__attack { border-color: #bf6d5c !important; color: #f0b09c !important; }
+.battle-settlement__armor { border-color: #729581 !important; color: #c1dfcd !important; }
+.battle-settlement__energy { border-color: #b19659 !important; color: #edd28b !important; }
+.battle-settlement__mine { border-color: #c08b4a !important; color: #f1c47d !important; }
+
+.battle-intent {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  text-shadow: 0 2px 6px #160c0b;
+}
+.battle-intent span { color: #d8b6a2; font-size: 13px; }
+.battle-intent strong { color: #f0a58c; font: 700 27px Georgia, serif; }
+.battle-intent small { color: #c4aa97; font-size: 11px; }
+.battle-intent.is-selectable { pointer-events: auto; cursor: crosshair; }
+.battle-intent.is-selectable::after {
+  content: '';
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  width: 260px;
+  height: var(--target-height);
+  transform: translateX(-50%);
+  border: 1px solid #d0ab6e66;
+  border-radius: 12px;
+  background: #e5b87408;
+}
+.battle-intent.is-targeted::after { border-color: #ffdc99; background: #e5b87422; box-shadow: 0 0 18px #f5c77744; }
+.battle-guard {
+  position: absolute;
+  z-index: 2;
+  padding: 6px 12px;
+  border: 1px solid #77958188;
+  border-radius: 999px;
+  background: #15201bdc;
+  color: #cae2d1;
+  font: 600 14px Georgia, "PingFang SC", serif;
+  transform: translateX(-50%);
+}
+.battle-guard[hidden] { display: none; }
+
 .battle-energy {
-  position: absolute; left: 155px; top: 865px; width: 132px; height: 132px;
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
-  border: 3px solid #ad8750; border-radius: 50%; background: radial-gradient(circle at 40% 25%, #384541, #171c1c 70%);
-  box-shadow: inset 0 0 0 5px #191b17, inset 0 0 0 6px #79623e, 0 12px 24px #150b12aa;
+  position: absolute;
+  left: 112px;
+  top: 947px;
+  width: 102px;
+  height: 102px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c3a367;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 30%, #414a40, #1a1c18 73%);
+  box-shadow: inset 0 0 0 4px #181916, inset 0 0 0 5px #806943, 0 8px 22px #080706bb;
 }
-.battle-energy strong { font: 600 47px Georgia, serif; }
-.battle-energy small { font-size: 24px; color: #a8997c; }
-.battle-energy > span { font-size: 14px; margin-top: 4px; color: #c5b38f; }
+.battle-energy strong { font: 600 35px Georgia, serif; }
+.battle-energy strong small { color: #b7a98b; font-size: 17px; }
+.battle-energy > span { margin-top: 2px; color: #cbbb99; font-size: 11px; }
+
 .battle-end {
-  position: absolute; top: 916px; right: 155px; width: 252px; height: 78px; pointer-events: auto;
-  border: 1px solid #c8a66a; border-radius: 9px; background: linear-gradient(#47352b, #281d19);
-  box-shadow: inset 0 0 0 4px #241b18, inset 0 0 0 5px #8a6844, 0 8px 18px #100a0aaa;
-  letter-spacing: 4px; font-size: 26px !important; font-weight: 650 !important;
+  position: absolute;
+  top: 948px;
+  left: 1460px;
+  width: 252px;
+  height: 78px;
+  box-sizing: border-box;
+  pointer-events: auto;
+  border: 1px solid #c4a66e;
+  border-radius: 8px;
+  background: linear-gradient(155deg, #51402d, #2e261e 65%, #241e1a);
+  box-shadow: inset 0 0 0 3px #201b17, 0 7px 18px #080706a8;
+  color: #f1dfb9 !important;
+  font-size: 18px !important;
+  font-weight: 650 !important;
+  letter-spacing: 2px;
   --hud-scale: 1;
   transform: scale(var(--hud-scale));
   transform-origin: center;
-  transition: filter .15s, transform .15s;
+  transition: filter .15s, transform .15s, border-color .15s;
 }
-.battle-end:hover:enabled { filter: brightness(1.25); transform: translateY(-3px) scale(var(--hud-scale)); }
+.battle-end:hover:enabled { filter: brightness(1.15); border-color: #f0d28b; transform: translateY(-2px) scale(var(--hud-scale)); }
 .battle-end:active:enabled { transform: translateY(1px) scale(var(--hud-scale)); }
-.battle-end:disabled { opacity: .5; cursor: default; }
+.battle-end:disabled { opacity: .58; cursor: default; }
+
 .battle-pile {
-  position: absolute; top: 932px; width: 100px; height: 125px; pointer-events: auto;
-  border: 0; background: transparent; padding: 0; text-align: center;
+  position: absolute;
+  top: 951px;
+  width: 100px;
+  height: 125px;
+  pointer-events: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
 }
-.battle-pile--draw { left: 206px; }
-.battle-pile--discard { right: 191px; }
+.battle-pile--draw { left: 285px; }
+.battle-pile--discard { left: 1735px; }
 .battle-pile__back {
-  display: block; position: absolute; inset: 0 19px 36px; transform: rotate(-10deg);
-  border: 2px solid #a17a47; border-radius: 6px;
-  background: #402725 url('/assets/icons/attack.png') center / cover;
-  box-shadow: -5px 4px 0 #382a23, -7px 5px 0 #8b6943, -11px 9px 0 #382a23, -13px 10px 0 #8b6943;
+  position: absolute;
+  inset: 0 19px 36px;
+  display: block;
+  transform: rotate(-8deg);
+  border: 1px solid #a98751;
+  border-radius: 5px;
+  background: #32231c url('/assets/icons/attack.png') center / cover;
+  box-shadow: -4px 3px 0 #251e18, -6px 4px 0 #8b6943, -9px 7px 0 #251e18;
 }
-.battle-pile--discard .battle-pile__back { transform: rotate(10deg); filter: saturate(.5); }
-.battle-pile strong { position: absolute; right: 5px; bottom: 32px; padding: 3px 8px; border-radius: 50%; background: #211816; font-size: 21px; }
-.battle-pile > span:last-child { position: absolute; bottom: 0; left: 0; right: 0; font-size: 15px; color: #d3bd94; }
-.battle-turn { position: absolute; top: 14px; left: 800px; width: 320px; text-align: center; text-shadow: 0 2px 5px #160e10; }
-.battle-turn span { font-size: 21px; letter-spacing: 3px; }
-.battle-turn small { font-size: 13px; margin-left: 17px; color: #c9b392; }
-.battle-intent { position: absolute; transform: translateX(-50%); white-space: nowrap; height: 36px; display: flex; align-items: center; gap: 9px; text-shadow: 0 2px 5px #140d0c; }
-.battle-intent span, .battle-intent small { font-size: 15px; color: #ebc1a2; }
-.battle-intent strong { font-size: 27px; color: #f1aa8c; }
-.battle-intent.is-selectable { pointer-events: auto; cursor: crosshair; }
-.battle-intent.is-selectable::after { content: ''; position: absolute; top: 38px; left: 50%; transform: translateX(-50%); width: 270px; height: calc(var(--target-height) - 65px); border: 2px solid #d0ab6e; border-radius: 16px; background: #e5b8740a; }
-.battle-intent.is-targeted::after { border-color: #ffdc99; background: #e5b87422; box-shadow: 0 0 22px #f5c77744; }
-.battle-guard { position: absolute; transform: translateX(-50%); font-size: 16px; color: #b3cbbd; opacity: .65; }
-.battle-guard.is-active { color: #daf4de; opacity: 1; }
-.battle-notice { position: absolute; left: 470px; top: 58px; width: 980px; text-align: center; font-size: 17px; letter-spacing: 1px; color: #e3cfaa; opacity: 0; transition: opacity .2s; text-shadow: 0 2px 5px #180f10; }
-.battle-notice.is-visible { opacity: 1; }
-.battle-float { position: absolute; font-size: 44px; font-weight: 750; color: #ffae92; text-shadow: 0 3px 8px #1c1010; z-index: 50; pointer-events: none; transform: translateX(-50%); white-space: nowrap; }
-.battle-float--block { color: #cbe8d5; font-size: 32px; }
-.battle-result, .battle-pile-dialog { position: absolute; inset: 0; z-index: 100; display: grid; place-items: center; pointer-events: auto; background: #120c10bb; }
-.battle-result[hidden], .battle-pile-dialog[hidden] { display: none; }
-.battle-result__panel, .battle-pile-dialog > div { width: 480px; padding: 48px; text-align: center; border: 1px solid #ad8750; border-radius: 14px; background: #251d1a; box-shadow: inset 0 0 0 7px #34271e, 0 25px 80px #090609bb; }
-.battle-result h1 { margin: 12px 0 22px; font: 700 64px "Songti SC", serif; letter-spacing: 12px; }
-.battle-result p, .battle-pile-dialog p { color: #cbb798; font-size: 17px; }
-.battle-result button, .battle-pile-dialog button { margin-top: 25px; padding: 16px 35px; background: #5e4430; border: 1px solid #bc955e; border-radius: 5px; }
-.battle-pile-dialog ul { list-style: none; padding: 0; text-align: left; }
-.battle-pile-dialog li { display: flex; justify-content: space-between; padding: 12px 0; }
-.battle-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) {
-  .battle-ui *, .battle-ui *::before, .battle-ui *::after { transition: none !important; }
+.battle-pile--discard .battle-pile__back { transform: rotate(8deg); filter: saturate(.55); }
+.battle-pile strong {
+  position: absolute;
+  right: 8px;
+  bottom: 31px;
+  min-width: 20px;
+  padding: 3px 6px;
+  border: 1px solid #b99b68;
+  border-radius: 999px;
+  background: #211c17;
+  font: 600 15px Georgia, serif;
 }
+.battle-pile > span:last-child { position: absolute; bottom: 4px; left: 0; right: 0; color: #cdbb98; font-size: 11px; }
 
-.battle-energy { width: 102px; height: 102px; }
-.battle-energy strong { font-size: 37px; }
-.battle-energy > span { font-size: 11px; }
-.battle-pile--draw { left: 280px; top: 940px; transform: scale(.8); }
-.battle-pile--discard { right: 280px; top: 985px; transform: scale(.65); transform-origin: top; }
-.battle-placement-target {
-  position: absolute; box-sizing: border-box; display: grid; place-items: center;
-  border: 2px solid #f2d394; border-radius: 10px; background: #e4c77e18;
-  color: #fff0c5; font-size: 19px; text-shadow: 0 2px 4px #1c130c;
-  box-shadow: inset 0 0 0 1px #fff1c533, 0 0 16px #f4cb7944;
-  pointer-events: none; z-index: 1;
+.battle-hand { position: absolute; inset: 0; pointer-events: none; }
+.hand-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 200px;
+  height: 300px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 14px;
+  background: #241b19;
+  pointer-events: auto;
+  touch-action: none;
+  transform-origin: center;
+  box-shadow: 0 10px 22px rgba(9, 5, 6, .75);
+  will-change: transform;
+  text-align: center;
+  isolation: isolate;
+  transition: box-shadow .16s ease, filter .16s ease;
 }
-.battle-placement-target.is-valid::after {
-  content: '✓'; position: absolute; top: 7px; right: 7px; width: 22px; height: 22px;
-  display: grid; place-items: center; border: 1px solid #e7c77f88; border-radius: 50%;
-  background: #241b19d9; color: #f2d394; font: 700 13px/1 sans-serif;
-  text-shadow: none; box-shadow: 0 2px 6px #140d0c88;
+.hand-card__art {
+  position: absolute;
+  inset: 8px 8px 126px;
+  overflow: hidden;
+  border-radius: 9px 9px 0 0;
+  background: radial-gradient(ellipse at center, #414e45, #181d1b);
 }
-.battle-placement-target.is-invalid { border-color: #cf7969; background: #8d3d3722; color: #f2b7a8; box-shadow: inset 0 0 0 1px #f2b7a833, 0 0 14px #dd6e5a44; }
-.battle-placement-target.is-invalid::after { content: none; }
-.battle-placement-target[hidden], .battle-intent[hidden], .battle-guard[hidden] { display: none; }
+.hand-card--crimson .hand-card__art { background: radial-gradient(ellipse at center, #714237, #241a19); }
+.hand-card--amber .hand-card__art { background: radial-gradient(ellipse at center, #735638, #292119); }
+.hand-card__art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 21%; pointer-events: none; }
+.hand-card__art::after { content: ''; position: absolute; inset: 65% 0 0; background: linear-gradient(transparent, #211e1a); }
+.hand-card--amber .hand-card__art img { filter: sepia(.55) brightness(.82); transform: rotate(30deg) scale(1.2); }
+.hand-card__frame { position: absolute; inset: 0; z-index: 2; background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat; pointer-events: none; filter: saturate(.75); }
+.hand-card__cost {
+  position: absolute;
+  top: -11px;
+  left: -12px;
+  z-index: 3;
+  width: 53px;
+  height: 53px;
+  display: grid;
+  place-items: center;
+  background: url('/assets/cards/cost.png') center / contain no-repeat;
+  color: #fff0c8;
+  font: 700 30px Georgia, serif;
+  text-shadow: 0 2px 3px #17100b;
+}
+.hand-card__title { position: absolute; top: 168px; left: 12px; right: 12px; color: #f1e3c5; font: 650 20px "PingFang SC", sans-serif; letter-spacing: 1px; }
+.hand-card__kind { position: absolute; top: 199px; left: 40px; right: 40px; color: #bca681; font-size: 11px; letter-spacing: 4px; }
+.hand-card__description { position: absolute; top: 222px; left: 13px; right: 13px; color: #e2d4bb; font-size: 12.5px; line-height: 1.65; }
+.hand-card.is-unaffordable .hand-card__cost { color: #efaa98; filter: saturate(.65); }
+.hand-card.is-unaffordable .hand-card__art { filter: saturate(.55) brightness(.72); }
+.hand-card.is-dragged { cursor: grabbing; }
+.hand-card.is-selected { box-shadow: 0 0 0 2px #e5c989, 0 0 14px #e5bb6955, 0 18px 30px #080706bb; }
+.hand-card.is-selected .hand-card__frame { filter: saturate(.95) brightness(1.12); }
+.hand-card.is-unaffordable.is-selected { box-shadow: 0 8px 18px #080706aa; }
+.hand-card.is-pressed { box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa; }
+.hand-card.is-dragged { box-shadow: 0 0 0 2px #efdbac, 0 0 20px #e5bb6977, 0 28px 44px #10090b99; }
+.hand-card.is-drop-valid { box-shadow: 0 0 0 2px #e5c989, 0 0 16px #e7c57955, 0 16px 26px #080706aa; }
+.hand-card.is-drop-invalid { box-shadow: 0 0 0 2px #c87363, 0 0 15px #cf655a55, 0 16px 26px #080706aa; }
 
-/* The hand overlays the board only while explicitly opened. */
 .battle-hand-surface {
-  position: absolute; left: 390px; top: 700px; width: 1140px; bottom: 48px;
-  pointer-events: none; opacity: 0;
+  position: absolute;
+  left: 390px;
+  top: 700px;
+  width: 1140px;
+  bottom: 48px;
+  pointer-events: none;
+  opacity: 0;
   background: radial-gradient(ellipse at 50% 100%, #140c10c9, transparent 72%);
-  transition: opacity .2s ease;
+  transition: opacity .18s ease;
 }
 .is-hand-open .battle-hand-surface { opacity: 1; }
 .battle-hand-toggle {
-  position: absolute; left: 510px; bottom: 0; width: 900px; height: 54px;
-  pointer-events: auto; z-index: 60; border: 0; border-top: 1px solid #9c7948;
-  border-radius: 18px 18px 0 0; background: linear-gradient(#382a22ee, #201815fa);
-  color: #e5d1a9; font-size: 19px !important; letter-spacing: 3px;
-  box-shadow: 0 -8px 28px #120b1044;
-  transition: background .2s, color .2s;
+  position: absolute;
+  left: 510px;
+  bottom: 0;
+  width: 900px;
+  height: 54px;
+  pointer-events: auto;
+  z-index: 60;
+  border: 1px solid #92794f;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: linear-gradient(#312a21ee, #1b1916fa);
+  color: #dbc9a4 !important;
+  font-size: 19px !important;
+  letter-spacing: 3px;
+  box-shadow: 0 -5px 18px #100d0a44;
+  transition: background .18s, color .18s;
 }
 .battle-hand-toggle::before {
-  content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 18px -3px 0;
-  border-left: 2px solid currentColor; border-top: 2px solid currentColor;
-  transform: rotate(45deg); transition: transform .2s;
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 18px -3px 0;
+  border-left: 1.5px solid currentColor;
+  border-top: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform .18s;
 }
-.is-hand-open .battle-hand-toggle::before { transform: rotate(225deg); margin-bottom: 1px; }
-.battle-hand-toggle:hover { background: #493626; color: #fff0cb; }
+.is-hand-open .battle-hand-toggle::before { transform: rotate(225deg); margin-bottom: 5px; }
+.battle-hand-toggle:hover { background: #403627; color: #fff0cb !important; }
 .battle-ui.is-placement-animating .battle-hand-toggle { visibility: hidden; }
-@media (prefers-reduced-motion: reduce) {
-  .battle-hand-surface, .battle-hand-toggle, .battle-hand-toggle::before { transition: none; }
-}
 
-.hand-card { overflow: visible; transition: box-shadow .16s ease, filter .16s ease; }
-.hand-card.is-selected {
-  box-shadow:
-    0 0 0 2px #e8cd93,
-    0 0 16px #e5bb6966,
-    0 26px 42px #10090bcc;
+.battle-placement-target {
+  position: absolute;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 2px solid #e5ce98;
+  border-radius: 8px;
+  background: #e4c77e16;
+  color: #fff0c5;
+  font-size: 17px;
+  text-shadow: 0 2px 4px #1c130c;
+  box-shadow: inset 0 0 0 1px #fff1c522, 0 0 14px #f4cb7933;
+  pointer-events: none;
+  z-index: 1;
 }
-.hand-card.is-selected .hand-card__frame {
-  filter: saturate(1) brightness(1.18) drop-shadow(0 0 5px #f3d58a);
+.battle-placement-target.is-valid::after {
+  content: '✓';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e7c77f88;
+  border-radius: 50%;
+  background: #241b19d9;
+  color: #f2d394;
+  font: 700 12px/1 sans-serif;
+  box-shadow: 0 2px 6px #140d0c88;
 }
-.hand-card.is-unaffordable { cursor: not-allowed; }
-.hand-card.is-unaffordable.is-selected { box-shadow: 0 10px 22px #090506aa; }
-.hand-card.is-unaffordable.is-selected .hand-card__frame { filter: saturate(.65) brightness(.84); }
-.hand-card.is-pressed {
-  box-shadow: 0 0 0 2px #e8cd93, 0 7px 14px #10090baa;
+.battle-placement-target.is-invalid { border-color: #cf7969; background: #8d3d371c; color: #f2b7a8; box-shadow: 0 0 12px #dd6e5a33; }
+.battle-placement-target.is-invalid::after { content: none; }
+.battle-placement-target[hidden], .battle-intent[hidden] { display: none; }
+
+.battle-float {
+  position: absolute;
+  z-index: 50;
+  color: #ffb49a;
+  font-size: 36px;
+  font-weight: 750;
+  text-shadow: 0 3px 8px #1c1010;
+  pointer-events: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
-.hand-card.is-dragged {
-  box-shadow: 0 0 0 2px #efdbac, 0 0 22px #e5bb6988, 0 30px 48px #10090b99;
+.battle-float--block { color: #cbe8d5; font-size: 28px; }
+.battle-result, .battle-pile-dialog {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  background: #100e0bd9;
+  backdrop-filter: blur(5px);
 }
-.hand-card.is-drop-valid {
-  box-shadow: 0 0 0 2px #f0d391, 0 0 18px #e7c57966, 0 16px 28px #10090baa;
+.battle-result[hidden], .battle-pile-dialog[hidden] { display: none; }
+.battle-result__panel, .battle-pile-dialog > div {
+  width: 460px;
+  padding: 40px;
+  text-align: center;
+  border: 1px solid #a78b58;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #302820, #1a1916 70%);
+  box-shadow: inset 0 0 0 4px #262119, 0 24px 70px #080706cc;
 }
-.hand-card.is-drop-valid .hand-card__frame { filter: saturate(1) brightness(1.12); }
-.hand-card.is-drop-invalid {
-  box-shadow: 0 0 0 2px #cf7969, 0 0 16px #cf655a66, 0 16px 28px #10090baa;
-}
-.hand-card.is-drop-invalid .hand-card__frame { filter: saturate(.8) brightness(.92); }
-.hand-card.is-playing {
-  transform-origin: center;
-  backface-visibility: hidden;
-  will-change: transform, opacity;
+.battle-result h1 { margin: 12px 0 22px; font: 700 54px "Songti SC", serif; letter-spacing: 8px; }
+.battle-result p, .battle-pile-dialog p { color: #cbbd9f; font-size: 15px; }
+.battle-result button, .battle-pile-dialog button { margin-top: 23px; padding: 13px 32px; border: 1px solid #b3915b; border-radius: 5px; background: #55432d; }
+.battle-pile-dialog ul { list-style: none; padding: 0; text-align: left; }
+.battle-pile-dialog li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #7b684455; }
+.battle-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-ui *, .battle-ui *::before, .battle-ui *::after { transition: none !important; }
 }

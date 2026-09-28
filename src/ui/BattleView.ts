@@ -58,6 +58,7 @@ export class BattleView {
   private readonly intent = document.createElement('div');
   private readonly guard = document.createElement('div');
   private readonly turn = document.createElement('div');
+  private readonly settlement = document.createElement('div');
   private readonly notice = document.createElement('div');
   private readonly live = document.createElement('div');
   private readonly result = document.createElement('div');
@@ -101,6 +102,7 @@ export class BattleView {
     this.intent.className = 'battle-intent';
     this.guard.className = 'battle-guard';
     this.turn.className = 'battle-turn';
+    this.settlement.className = 'battle-settlement';
     this.notice.className = 'battle-notice';
     this.live.className = 'battle-sr-only';
     this.live.setAttribute('role', 'status');
@@ -114,8 +116,10 @@ export class BattleView {
     this.pileDialog.hidden = true;
     this.pileDialog.setAttribute('role', 'dialog');
     this.pileDialog.setAttribute('aria-modal', 'true');
-    this.root.append(this.turn, this.intent, this.guard, this.energy, this.drawPile, this.discardPile, this.end, this.handSurface, this.hand, this.placementTarget, this.handToggle, this.notice, this.live, this.result, this.pileDialog);
+    this.root.append(this.turn, this.settlement, this.intent, this.guard, this.energy, this.drawPile, this.discardPile, this.end, this.handSurface, this.hand, this.placementTarget, this.handToggle, this.notice, this.live, this.result, this.pileDialog);
     document.getElementById('design-root')!.append(this.root);
+    this.battle.configureBoard(settings.cols, settings.rows, board.getGoldCells());
+    this.board.syncUnits(this.battle.units);
     window.addEventListener('pointerdown', event => {
       if (event.button !== 0 || this.drag || !this.pileDialog.hidden || !this.result.hidden) return;
       // Canvas clicks are already routed through GameApp; controls retain their actions.
@@ -221,9 +225,9 @@ export class BattleView {
     element.className = `hand-card hand-card--${def.tone}`;
     element.dataset.cardId = String(card.id);
     element.style.pointerEvents = 'none';
-    const placed = def.art === 'slave' ? '奴隶' : '剑标记';
-    element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，向空格放入 1 个${placed}。`);
-    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">填格</span><span class="hand-card__description">放入 1 个${placed}。</span>`;
+    const placed = def.mines ? '矿工' : def.boardKind === 'guard' ? '护卫' : def.boardKind === 'energy' ? '雾影' : '攻击单位';
+    element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，放置${placed}。${def.description.join(' ')}`);
+    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>`;
     element.addEventListener('pointerenter', () => { if (this.expanded && !this.isDealing() && !this.drag && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('focus', () => { if (this.expanded && !this.isDealing() && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('blur', () => { if (!this.drag && this.hover === card.id) this.hover = null; });
@@ -262,6 +266,7 @@ export class BattleView {
 
   private sync(): void {
     const b = this.battle;
+    this.board.syncUnits(b.units);
     let index = 0;
     for (const card of b.hand) {
       const previous = this.nodes.get(card.id);
@@ -289,11 +294,14 @@ export class BattleView {
     this.drawPile.setAttribute('aria-label', `查看抽牌堆，${b.drawPile.length} 张`);
     this.discardPile.setAttribute('aria-label', `查看弃牌堆，${b.discardPile.length} 张`);
     this.end.disabled = b.phase !== 'player' || this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
-    this.end.textContent = b.phase === 'enemy' ? '敌人行动中' : '结束回合';
+    this.end.textContent = b.phase === 'enemy' ? '敌人行动中' : b.phase === 'player' ? '结束回合' : '战斗结束';
     this.turn.innerHTML = `<span>第 ${b.turn} 回合</span><small>${b.phase === 'player' ? '你的回合' : b.phase === 'enemy' ? '敌人回合' : '战斗结束'}</small>`;
-    this.intent.innerHTML = `<span>攻击意图</span><strong>${b.intent}</strong><small>伤害</small>`;
-    this.guard.textContent = `格挡 ${b.block}`;
+    const boardThreat = b.units.filter(unit => unit.owner === 'enemy').reduce((total, unit) => total + (unit.attack ?? 0), 0);
+    this.intent.innerHTML = `<span>来袭伤害</span><strong>${b.intent + boardThreat}</strong>${boardThreat ? `<small>本体 ${b.intent} · 棋盘 +${boardThreat}</small>` : '<small>敌方意图</small>'}`;
+    this.intent.hidden = b.phase === 'won' || b.phase === 'lost';
+    this.guard.textContent = `护甲 ${b.block}`;
     this.guard.classList.toggle('is-active', b.block > 0);
+    this.guard.hidden = b.block <= 0;
     if (b.phase === 'won' || b.phase === 'lost') this.resultTimer = 0.65;
   }
 
@@ -320,7 +328,7 @@ export class BattleView {
   private syncMinePreview(): void {
     const id = this.drag?.id ?? this.selected;
     const card = id === null ? undefined : this.nodes.get(id)?.card;
-    const aiming = card !== undefined && CARD_DEFS[card.key].art === 'slave' && this.target !== null && !this.board.hasPiece(this.target.col, this.target.row);
+    const aiming = card !== undefined && CARD_DEFS[card.key].mines === true && this.target !== null && !this.board.hasPiece(this.target.col, this.target.row);
     this.board.setMinePreview(aiming && this.target ? { col: this.target.col, row: this.target.row } : null);
   }
 
@@ -456,7 +464,7 @@ export class BattleView {
       this.rejectPlacement(id, '请放入空格，已占用的格子不能重复放置');
       return;
     }
-    const result = this.battle.placeCard(id);
+    const result = this.battle.placeCard(id, target.col, target.row);
     if (!result.ok) {
       this.rejectPlacement(id, result.message);
       if (result.message.startsWith('能量不足')) this.insufficientEnergy(id, CARD_DEFS[node.card.key].cost, false);
@@ -466,8 +474,7 @@ export class BattleView {
     // Clear the pending target without tucking the rest of the hand.
     this.cancel(false);
     // Reserve the cell immediately; reveal it exactly when the card lands.
-    const piece = CARD_DEFS[node.card.key].art === 'slave' ? 'slave' : 'mark';
-    this.board.place(target.col, target.row, this.reduced.matches ? 0 : PLAY_FLIGHT, piece);
+    this.board.syncUnits(this.battle.units, this.reduced.matches ? 0 : PLAY_FLIGHT);
     node.origin = { ...node.pose };
     node.element.classList.add('is-playing');
     node.destination = {
@@ -514,10 +521,26 @@ export class BattleView {
       node.element.style.pointerEvents = 'none';
       node.element.setAttribute('aria-hidden', 'true');
     });
-    const mined = this.board.mineWithSlaves(this.settings);
-    this.battle.endTurn(mined);
+    const settlement = this.battle.endTurn();
+    if (!settlement) return;
+    this.board.pulseSettlement(settlement.unitIds);
+    this.settlement.innerHTML = [
+      settlement.damage ? `<span class="battle-settlement__attack">⚔ 伤害 ${settlement.damage}</span>` : '',
+      settlement.armor ? `<span class="battle-settlement__armor">◆ 护甲 ${settlement.armor}</span>` : '',
+      settlement.energy ? `<span class="battle-settlement__energy">✦ 储能 +${settlement.energy}</span>` : '',
+      settlement.mined ? `<span class="battle-settlement__mine">⛏ 能量上限 +${settlement.mined}</span>` : '',
+    ].filter(Boolean).join('') || '<span>棋盘结算 · 暂无产出</span>';
+    this.settlement.classList.add('is-visible');
+    window.setTimeout(() => this.settlement.classList.remove('is-visible'), 1900);
     this.sync();
-    this.message(mined > 0 ? `挖矿完成：能量上限 +${mined}（下回合生效）` : '敌人回合');
+    const layout = battleLayout(this.settings);
+    if (settlement.damage > 0) this.float(`-${settlement.damage} 结算伤害`, layout.foeX, layout.foeBottom - 72);
+    if (settlement.victory) {
+      this.message(`棋盘结算造成 ${settlement.damage} 点伤害，击败缝偶`);
+      this.turnCue = 'none';
+      return;
+    }
+    this.message(settlement.mined ? `开采完成：能量上限 +${settlement.mined}（永久）` : '敌人回合 · 棋盘随从开始结算');
     this.turnCue = 'enemy-strike';
     this.turnPause = this.reduced.matches ? 0.05
       : leaving.length ? DISCARD_FLIGHT + (leaving.length - 1) * DISCARD_STAGGER + 0.08 : 0.08;
@@ -528,13 +551,14 @@ export class BattleView {
       const hit = this.battle.strikeEnemy();
       this.turnCue = 'none';
       if (!hit) return;
+      this.board.syncUnits(this.battle.units);
       const layout = battleLayout(this.settings);
       if (hit.damage > 0) {
         this.float(`-${hit.damage}`, layout.heroX, layout.heroBottom - 72);
         this.message(`缝偶造成 ${hit.damage} 点伤害`);
       } else {
         this.float(`格挡 ${hit.blocked}`, layout.heroX, layout.heroBottom - 72, 'block');
-        this.message('格挡了全部伤害');
+        this.message('护甲挡住了全部伤害');
       }
       this.sync();
       if (this.battle.phase === 'lost') return;
@@ -689,8 +713,6 @@ export class BattleView {
     this.guard.style.top = `${layout.heroBottom + 16}px`;
     // Transparent target extends across the portrait, while its text sits above it.
     this.intent.style.setProperty('--target-height', `${layout.foeBottom - layout.foeTop + 100}px`);
-    this.intent.hidden = true;
-    this.guard.hidden = true;
     const actors = [...this.nodes.values(), ...this.departing];
     for (const node of actors) {
       const id = node.card.id;

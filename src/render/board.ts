@@ -1,4 +1,4 @@
-import { PIECE_ART, type PieceKind } from '@/config/pieces';
+import { PIECE_ART, type BoardUnit, type PieceKind } from '@/config/pieces';
 import { boardMetrics, type BoardSettings } from '@/config/board';
 import {
   DISSOLVE_MASK,
@@ -53,6 +53,14 @@ type TileFx = {
   wantHover: number;
   iconOn: boolean;
   kind: PieceKind;
+  owner: 'player' | 'enemy' | 'neutral';
+  id?: number;
+  source?: BoardUnit['source'];
+  attack: number;
+  armor: number;
+  energy: number;
+  mined: boolean;
+  settleT: number;
   iconT: number;
   iconDelay: number;
   iconSeed: number;
@@ -164,6 +172,7 @@ export class StoneBoard {
     private readonly attackIcon: HTMLImageElement,
     private readonly goldIcon: HTMLImageElement,
     private readonly slaveIcon: HTMLImageElement,
+    private readonly threatIcon: HTMLImageElement,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -180,13 +189,14 @@ export class StoneBoard {
   }
 
   static async create(): Promise<StoneBoard> {
-    const [tiles, attackIcon, goldIcon, slaveIcon] = await Promise.all([
+    const [tiles, attackIcon, goldIcon, slaveIcon, threatIcon] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
       loadImage(PIECE_ART.mark),
       loadImage(PIECE_ART.gold),
       loadImage(PIECE_ART.slave),
+      loadImage(PIECE_ART.threat),
     ]);
-    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon);
+    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon, threatIcon);
   }
 
   /** Enchanted destination highlight while the player is holding a card. */
@@ -220,6 +230,52 @@ export class StoneBoard {
     return this.fx.get(cellKey(col, row))?.iconOn ?? false;
   }
 
+  getGoldCells(): Cell[] {
+    return [...this.fx.entries()]
+      .filter(([, fx]) => fx.iconOn && fx.kind === 'gold')
+      .map(([key]) => {
+        const [col, row] = key.split(',').map(Number);
+        return { col: col!, row: row! };
+      });
+  }
+
+  /** Mirror the combat model's occupants into the canvas layer. */
+  syncUnits(units: BoardUnit[], newUnitDelay = 0): void {
+    const next = new Map(units.map(unit => [cellKey(unit.col, unit.row), unit]));
+    for (const [key, fx] of this.fx) {
+      if (fx.kind !== 'gold' && fx.iconOn && !next.has(key)) {
+        fx.iconOn = false;
+        fx.id = undefined;
+        fx.iconT = 0;
+      }
+    }
+    for (const [key, unit] of next) {
+      const [col, row] = key.split(',').map(Number);
+      const fx = this.fxOf({ col: col!, row: row! });
+      const isNew = !fx.iconOn || fx.id !== unit.id;
+      fx.iconOn = true;
+      fx.id = unit.id;
+      fx.kind = unit.kind;
+      fx.owner = unit.owner;
+      fx.source = unit.source;
+      fx.attack = unit.attack ?? 0;
+      fx.armor = unit.armor ?? 0;
+      fx.energy = unit.energy ?? 0;
+      fx.mined = unit.mined ?? false;
+      if (isNew) {
+        fx.iconT = 0;
+        fx.iconDelay = newUnitDelay;
+        fx.iconSeed = row! * 12.9898 + col! * 78.233;
+        fx.popT = newUnitDelay > 0 ? 99 : 0;
+      }
+    }
+  }
+
+  pulseSettlement(ids: number[]): void {
+    const chosen = new Set(ids);
+    for (const fx of this.fx.values()) if (fx.id !== undefined && chosen.has(fx.id)) fx.settleT = 0.9;
+  }
+
   place(col: number, row: number, delay = 0, kind: 'mark' | 'slave' = 'mark'): void {
     this.setPiece(col, row, kind, delay);
   }
@@ -245,27 +301,15 @@ export class StoneBoard {
     }
   }
 
-  /** Each revealed slave beside a mine digs once at the end of the turn. */
-  mineWithSlaves(s: BoardSettings): number {
-    let mined = 0;
-    for (let row = 0; row < s.rows; row++) {
-      for (let col = 0; col < s.cols; col++) {
-        const worker = this.fx.get(cellKey(col, row));
-        if (!worker?.iconOn || worker.kind !== 'slave') continue;
-        const mine = this.aimMine(col, row, s);
-        if (!mine) continue;
-        worker.popT = 0;
-        this.fx.get(cellKey(mine.col, mine.row))!.popT = 0;
-        mined++;
-      }
-    }
-    return mined;
-  }
-
   private setPiece(col: number, row: number, kind: PieceKind, delay: number): void {
     const fx = this.fxOf({ col, row });
     fx.iconOn = true;
     fx.kind = kind;
+    fx.owner = kind === 'gold' ? 'neutral' : 'player';
+    fx.attack = fx.armor = fx.energy = 0;
+    fx.id = undefined;
+    fx.source = undefined;
+    fx.mined = false;
     fx.iconT = 0;
     fx.iconDelay = delay;
     fx.iconSeed = row * 12.9898 + col * 78.233;
@@ -298,6 +342,7 @@ export class StoneBoard {
     for (const fx of this.fx.values()) {
       fx.squash += (fx.wantSquash - fx.squash) * k;
       fx.hover += (fx.wantHover - fx.hover) * hk;
+      fx.settleT = Math.max(0, fx.settleT - dt);
       fx.popT += dt / 0.28;
       if (!fx.iconOn) continue;
       if (fx.iconDelay > 0) {
@@ -485,6 +530,12 @@ export class StoneBoard {
         wantHover: 0,
         iconOn: false,
         kind: 'mark',
+        owner: 'neutral',
+        attack: 0,
+        armor: 0,
+        energy: 0,
+        mined: false,
+        settleT: 0,
         iconT: 0,
         iconDelay: 0,
         iconSeed: 0,
@@ -536,11 +587,29 @@ export class StoneBoard {
     roundRect(g, 0, 0, size, size, radius);
     g.clip();
     g.drawImage(tile, 0, 0, size, size);
+    g.fillStyle = 'rgba(22, 18, 14, .09)';
+    g.fillRect(0, 0, size, size);
     if (hover > 0.01) {
       g.fillStyle = `rgba(255,255,255,${0.42 * hover})`;
       g.fillRect(0, 0, size, size);
     }
+    if (fx?.iconOn && fx.owner === 'enemy') {
+      g.fillStyle = 'rgba(122, 35, 31, .17)';
+      g.fillRect(0, 0, size, size);
+    }
     this.drawAttackIcon(g, size, fx);
+    this.drawUnitBadge(g, size, fx);
+    g.strokeStyle = 'rgba(232, 213, 174, .24)';
+    g.lineWidth = 1;
+    roundRect(g, 1, 1, size - 2, size - 2, radius);
+    g.stroke();
+    if (fx?.settleT) {
+      g.globalAlpha = Math.min(1, fx.settleT * 1.6);
+      g.strokeStyle = '#f3d58b';
+      g.lineWidth = Math.max(2, size * 0.025);
+      roundRect(g, 3, 3, size - 6, size - 6, radius * 0.8);
+      g.stroke();
+    }
     g.restore();
   }
 
@@ -560,7 +629,9 @@ export class StoneBoard {
     g.translate(-iconSize / 2, -iconSize / 2);
     drawDissolvingIcon(
       g,
-      fx.kind === 'gold' ? this.goldIcon : fx.kind === 'slave' ? this.slaveIcon : this.attackIcon,
+      fx.kind === 'gold' || fx.kind === 'energy' ? this.goldIcon
+        : fx.kind === 'slave' || fx.kind === 'guard' ? this.slaveIcon
+          : fx.kind === 'threat' ? this.threatIcon : this.attackIcon,
       iconSize,
       t,
       fx.iconSeed,
@@ -569,6 +640,36 @@ export class StoneBoard {
       this.iconBuf,
       this.iconBufCtx,
     );
+    g.restore();
+  }
+
+  private drawUnitBadge(g: CanvasRenderingContext2D, size: number, fx: TileFx | undefined): void {
+    if (!fx?.iconOn || fx.kind === 'gold') return;
+    const pieces: string[] = [];
+    if (fx.attack > 0) pieces.push(`⚔${fx.attack}`);
+    if (fx.armor > 0) pieces.push(`◆${fx.armor}`);
+    if (fx.energy > 0) pieces.push(`✦${fx.energy}`);
+    if (fx.kind === 'threat' && !pieces.length) pieces.push('⚔2');
+    if (fx.kind === 'slave' && fx.mined) pieces.push('✓');
+    if (!pieces.length) return;
+    const text = pieces.join('  ');
+    const width = Math.min(size - 12, Math.max(40, text.length * size * 0.105));
+    const height = Math.max(19, size * 0.2);
+    const x = size - width - 5;
+    const y = size - height - 5;
+    g.save();
+    g.globalAlpha = fx.owner === 'enemy' ? 0.97 : 0.94;
+    g.fillStyle = fx.owner === 'enemy' ? '#451b19' : '#1e211e';
+    g.strokeStyle = fx.owner === 'enemy' ? '#c26a55' : '#c3a46c';
+    g.lineWidth = 1.5;
+    roundRect(g, x, y, width, height, height * 0.4);
+    g.fill();
+    g.stroke();
+    g.fillStyle = fx.owner === 'enemy' ? '#f1b19a' : '#f1dfb8';
+    g.font = `700 ${Math.max(11, size * 0.105)}px Georgia, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, x + width / 2, y + height / 2 + 0.5, width - 5);
     g.restore();
   }
 
@@ -606,7 +707,7 @@ export class StoneBoard {
     for (let row = 0; row < s.rows; row++) {
       for (let col = 0; col < s.cols; col++) {
         const fx = this.fx.get(cellKey(col, row));
-        if (fx?.iconOn && fx.kind === 'slave' && fx.iconT > 0) sources.push({ col, row });
+        if (fx?.iconOn && fx.kind === 'slave' && !fx.mined && fx.iconT > 0) sources.push({ col, row });
       }
     }
     if (this.minePreview) sources.push(this.minePreview);

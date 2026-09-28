@@ -101,8 +101,11 @@ export class FighterCards {
   setBattle(battle: Battle): void {
     if (this.battleRevision === battle.revision) return;
     this.battleRevision = battle.revision;
-    Object.assign(this.fighters[0]!, { hp: battle.heroHp, maxHp: battle.heroMaxHp, atk: battle.block, statLabel: '格挡' });
-    Object.assign(this.fighters[1]!, { hp: battle.foeHp, maxHp: battle.foeMaxHp, atk: battle.intent, statLabel: '攻击' });
+    const boardThreat = battle.units
+      .filter(unit => unit.owner === 'enemy')
+      .reduce((total, unit) => total + (unit.attack ?? 0), 0);
+    Object.assign(this.fighters[0]!, { hp: battle.heroHp, maxHp: battle.heroMaxHp, atk: battle.block, statLabel: '护甲' });
+    Object.assign(this.fighters[1]!, { hp: battle.foeHp, maxHp: battle.foeMaxHp, atk: battle.intent + boardThreat, statLabel: '来袭' });
     for (let i = 0; i < this.cards.length; i++) {
       const canvas = this.cards[i]!;
       const g = canvas.getContext('2d')!;
