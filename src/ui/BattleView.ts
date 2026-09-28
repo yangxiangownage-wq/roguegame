@@ -10,7 +10,7 @@ type CardNode = {
   card: BattleCard; element: HTMLButtonElement; pose: Pose;
   vx: number; vy: number; va: number; vs: number;
   destination?: { x: number; y: number; scale: number; col: number; row: number };
-  landed?: boolean; dealt?: boolean;
+  landed?: boolean; landing?: boolean; dealt?: boolean;
   origin?: Pose;
   press: number; release: number;
   state: 'hand' | 'play' | 'discard'; elapsed: number; delay: number;
@@ -24,8 +24,9 @@ const PLAY_FLIGHT = 0.34;
 const PLAY_SETTLE = 0.14;
 const DISCARD_FLIGHT = 0.42;
 const DISCARD_STAGGER = 0.035;
-const DEAL_FLIGHT = 0.48;
-const DEAL_STAGGER = 0.065;
+const DEAL_FLIGHT = 0.34;
+const DEAL_LAND = 0.1;
+const DEAL_STAGGER = 0.04;
 const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -153,7 +154,7 @@ export class BattleView {
   private syncCardInteractivity(): void {
     const dealing = this.isDealing();
     for (const node of this.nodes.values()) {
-      const ready = this.reduced.matches || node.elapsed >= node.delay + DEAL_FLIGHT;
+      const ready = this.reduced.matches || node.elapsed >= node.delay + DEAL_FLIGHT + DEAL_LAND;
       const interactive = this.expanded && !dealing && ready && this.revealBeforeDiscard === 0 && node.state === 'hand' && this.battle.phase === 'player';
       node.element.tabIndex = interactive ? 0 : -1;
       node.element.setAttribute('aria-hidden', String(!interactive));
@@ -166,7 +167,7 @@ export class BattleView {
   private isDealing(): boolean {
     if (this.reduced.matches) return false;
     return [...this.nodes.values()].some(node =>
-      node.state === 'hand' && node.elapsed < node.delay + DEAL_FLIGHT,
+      node.state === 'hand' && node.elapsed < node.delay + DEAL_FLIGHT + DEAL_LAND,
     );
   }
 
@@ -777,17 +778,32 @@ export class BattleView {
         node.element.style.opacity = dealElapsed < 0 ? '0' : '1';
         if (dealElapsed < 0) continue;
         if (!this.reduced.matches && !node.dealt) {
-          const progress = Math.min(1, dealElapsed / DEAL_FLIGHT);
-          const u = dealProgress(progress);
-          const origin = node.origin ?? this.drawPose();
-          scripted = true;
-          target = {
-            x: mix(origin.x, target.x, u),
-            y: mix(origin.y, target.y, u) - Math.sin(progress * Math.PI) * 30,
-            angle: mix(origin.angle, target.angle, u) + Math.sin(progress * Math.PI) * 2.5,
-            scale: mix(origin.scale, target.scale, u),
-          };
-          if (progress >= 1) node.dealt = true;
+          if (dealElapsed < DEAL_FLIGHT) {
+            const progress = Math.min(1, dealElapsed / DEAL_FLIGHT);
+            const u = dealProgress(progress);
+            const origin = node.origin ?? this.drawPose();
+            const land = Math.pow(progress, 4);
+            scripted = true;
+            target = {
+              x: mix(origin.x, target.x, u),
+              y: mix(origin.y, target.y, u) - Math.sin(progress * Math.PI) * 30 - land * 8,
+              angle: mix(origin.angle, target.angle, u) + Math.sin(progress * Math.PI) * 2 + land,
+              scale: mix(origin.scale, target.scale, u) + land * target.scale * 0.025,
+            };
+          } else {
+            if (!node.landing) {
+              node.landing = true;
+              node.pose.x = target.x;
+              node.pose.y = target.y - 8;
+              node.pose.angle = target.angle + 1;
+              node.pose.scale = target.scale * 1.025;
+              node.vx = 0;
+              node.vy = 90;
+              node.va = -9;
+              node.vs = -0.14;
+            }
+            if (dealElapsed >= DEAL_FLIGHT + DEAL_LAND) node.dealt = true;
+          }
         }
       }
       // Stable, damped spring with small substeps: smooth even after a slow frame.
@@ -798,8 +814,9 @@ export class BattleView {
           if (this.reduced.matches || scripted) { node.pose[key] = target[key]; node[velocity] = 0; }
           else {
             const dragging = this.drag?.id === id;
-            const stiffness = dragging ? 460 : CARD_SPRING_STIFFNESS;
-            const damping = dragging ? 32 : CARD_SPRING_DAMPING;
+            const landing = node.state === 'hand' && node.landing && !node.dealt;
+            const stiffness = landing ? 400 : dragging ? 460 : CARD_SPRING_STIFFNESS;
+            const damping = landing ? 30 : dragging ? 32 : CARD_SPRING_DAMPING;
             node[velocity] += ((target[key] - node.pose[key]) * stiffness - node[velocity] * damping) * step;
             node.pose[key] += node[velocity] * step;
           }
