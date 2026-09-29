@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Settlement Digits";
+  src: url('/assets/fonts/pixelify-sans.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 .battle-ui {
   position: absolute;
   inset: 0;
@@ -45,31 +53,57 @@
 .battle-notice.is-visible { opacity: 1; }
 .battle-settlement {
   position: absolute;
-  top: 98px;
-  left: 590px;
-  display: flex;
-  justify-content: center;
-  gap: 9px;
-  width: 740px;
+  z-index: 20;
+  top: 108px;
+  left: 960px;
+  box-sizing: border-box;
+  width: calc(var(--settlement-columns, 1) * 120px + 32px);
+  min-width: 260px;
+  max-width: 580px;
+  padding: 8px 16px 10px;
+  border: 1px solid #aa8d5266;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #201d19eb, #161411f2);
+  box-shadow: 0 3px 0 #100e0bd9, 0 8px 20px #08070655;
   opacity: 0;
-  transform: translateY(-5px);
-  transition: opacity .18s ease, transform .18s ease;
+  transform: translate(-50%, -5px);
+  transition: opacity .12s ease, transform .12s ease;
   pointer-events: none;
 }
-.battle-settlement.is-visible { opacity: 1; transform: translateY(0); }
-.battle-settlement span {
-  padding: 6px 11px;
-  border: 1px solid #aa956b88;
-  border-radius: 999px;
-  background: #171512df;
-  color: #eee2c8;
-  font-size: 13px;
-  box-shadow: 0 3px 12px #0b0908aa;
+.battle-settlement.is-visible { opacity: 1; transform: translate(-50%, 0); }
+.battle-settlement__heading {
+  margin-bottom: 5px;
+  color: #c6b595;
+  font: 600 10px/1.2 "PingFang SC", sans-serif;
+  letter-spacing: 1.5px;
+  text-align: center;
 }
-.battle-settlement__attack { border-color: #bf6d5c !important; color: #f0b09c !important; }
-.battle-settlement__armor { border-color: #729581 !important; color: #c1dfcd !important; }
-.battle-settlement__energy { border-color: #b19659 !important; color: #edd28b !important; }
-.battle-settlement__mine { border-color: #c08b4a !important; color: #f1c47d !important; }
+.battle-settlement__stats { display: flex; justify-content: center; align-items: center; }
+.battle-settlement__stat {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 0 10px;
+  border-left: 1px solid #9c82502b;
+}
+.battle-settlement__stat:first-child { border-left: 0; }
+.battle-settlement__stat small { color: #c6b99f; font: 600 10px/1.2 "PingFang SC", sans-serif; }
+.battle-settlement__stat strong {
+  display: flex;
+  align-items: baseline;
+  font: 700 32px/1 "Settlement Digits", monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 2px 2px 0 #080706;
+}
+.battle-settlement__stat strong span { display: inline-block; min-width: .55em; text-align: left; }
+.battle-settlement__attack strong { color: #ffac89; }
+.battle-settlement__armor strong { color: #9edbff; }
+.battle-settlement__energy strong { color: #b5e68e; }
+.battle-settlement__mine strong { color: #ffdc80; }
+.battle-settlement__empty { padding: 8px; color: #dbcfb4; text-align: center; font-size: 13px; }
 
 .battle-intent {
   position: absolute;
@@ -347,6 +381,39 @@
   white-space: nowrap;
 }
 .battle-float--block { color: #cbe8d5; font-size: 28px; }
+.battle-score {
+  position: absolute;
+  z-index: 80;
+  transform: translate(-50%, -50%) scale(var(--score-scale, 1));
+  white-space: nowrap;
+  pointer-events: none;
+}
+.battle-score__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform-origin: 50% 80%;
+  will-change: transform, opacity;
+}
+.battle-score__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  color: #ffe6a0;
+  text-shadow: 2px 2px 0 #17100b, -1px -1px 0 #17100b, 1px -1px 0 #17100b, -1px 1px 0 #17100b;
+}
+.battle-score strong {
+  font: 700 36px/.9 "Settlement Digits", monospace;
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 0;
+}
+.battle-score__unit { margin-left: 2px; font: 800 13px/1 "PingFang SC", sans-serif; }
+.battle-score__kind { margin-left: 7px; font: 700 12px/1 "PingFang SC", sans-serif; color: #fff2d8; }
+.battle-score--attack { color: #ffac89; }
+.battle-score--armor { color: #9edbff; }
+.battle-score--energy { color: #b5e68e; }
+.battle-score--mine { color: #ffdc80; }
 .battle-result, .battle-pile-dialog {
   position: absolute;
   inset: 0;

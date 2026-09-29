@@ -267,13 +267,16 @@ export class StoneBoard {
         fx.iconDelay = newUnitDelay;
         fx.iconSeed = row! * 12.9898 + col! * 78.233;
         fx.popT = newUnitDelay > 0 ? 99 : 0;
+        fx.settleT = 0;
       }
     }
   }
 
   pulseSettlement(ids: number[]): void {
     const chosen = new Set(ids);
-    for (const fx of this.fx.values()) if (fx.id !== undefined && chosen.has(fx.id)) fx.settleT = 0.9;
+    for (const fx of this.fx.values()) {
+      if (fx.id !== undefined && chosen.has(fx.id)) fx.settleT = 0.32;
+    }
   }
 
   place(col: number, row: number, delay = 0, kind: 'mark' | 'slave' = 'mark'): void {
@@ -552,6 +555,7 @@ export class StoneBoard {
       fx.squash > 0.02 ||
       fx.hover > 0.02 ||
       fx.popT < 1 ||
+      fx.settleT > 0 ||
       (fx.iconOn && fx.iconT < 1)
     );
   }
@@ -597,6 +601,10 @@ export class StoneBoard {
       g.fillStyle = 'rgba(122, 35, 31, .17)';
       g.fillRect(0, 0, size, size);
     }
+    if (fx?.settleT) {
+      g.fillStyle = `rgba(255, 233, 182, ${0.13 * fx.settleT / 0.32})`;
+      g.fillRect(0, 0, size, size);
+    }
     this.drawAttackIcon(g, size, fx);
     this.drawUnitBadge(g, size, fx);
     g.strokeStyle = 'rgba(232, 213, 174, .24)';
@@ -604,8 +612,8 @@ export class StoneBoard {
     roundRect(g, 1, 1, size - 2, size - 2, radius);
     g.stroke();
     if (fx?.settleT) {
-      g.globalAlpha = Math.min(1, fx.settleT * 1.6);
-      g.strokeStyle = '#f3d58b';
+      g.globalAlpha = Math.min(1, fx.settleT / 0.2);
+      g.strokeStyle = fx.attack > 0 ? '#f7ab8c' : fx.armor > 0 ? '#b4dded' : '#f3d58b';
       g.lineWidth = Math.max(2, size * 0.025);
       roundRect(g, 3, 3, size - 6, size - 6, radius * 0.8);
       g.stroke();
@@ -625,7 +633,10 @@ export class StoneBoard {
     const sc = spawnScale(t);
     g.save();
     g.translate(size / 2, size / 2);
-    g.scale(sc, sc);
+    const triggerTime = 0.32 - (fx.settleT ?? 0);
+    const pulse = fx.settleT > 0 ? Math.sin(Math.PI * Math.min(1, triggerTime / 0.2)) : 0;
+    g.translate(0, -size * 0.025 * pulse);
+    g.scale(sc * (1 + 0.045 * pulse), sc * (1 + 0.065 * pulse));
     g.translate(-iconSize / 2, -iconSize / 2);
     drawDissolvingIcon(
       g,

@@ -42,7 +42,7 @@ export class GameApp {
     if (!hud) throw new Error('#hud-inspector missing');
     mountHudInspector(hud, this.settings, { ...save, hudHidden: true });
     this.board.seedGold(this.settings.cols, this.settings.rows);
-    this.battleView = new BattleView(this.settings, this.board);
+    this.battleView = new BattleView(this.settings, this.board, this.fighters);
     this.fit = applyDesignStage();
     this.bindResize();
     this.bindPointer();
@@ -117,6 +117,7 @@ export class GameApp {
     this.lastTs = ts;
     this.board.update(dt);
     this.battleView.update(dt);
+    this.fighters.update(dt);
     this.fighters.setBattle(this.battleView.battle);
     this.draw();
     requestAnimationFrame((t) => this.tick(t));

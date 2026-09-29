@@ -1,11 +1,15 @@
-import { Battle, CARD_DEFS, type BattleCard } from '@/game/battle';
+import { Battle, CARD_DEFS, type BattleCard, type BoardSettlement } from '@/game/battle';
 import type { StoneBoard } from '@/render/board';
-import { battleLayout, boardTarget, isBoardArea } from '@/config/battleLayout';
+import type { FighterCards } from '@/render/fighterCards';
+import { battleLayout, boardCellCenter, boardTarget, isBoardArea } from '@/config/battleLayout';
 import { clientToDesign, computeDesignFit } from '@/config/design';
 import type { BoardSettings } from '@/config/board';
 import './battle.css';
 
 type Pose = { x: number; y: number; angle: number; scale: number };
+type ScoreKind = 'attack' | 'armor' | 'energy' | 'mine';
+type ScorePart = { kind: ScoreKind; value: number };
+type SettlementDisplay = { attack: number; armor: number; foeHp: number; nextEnergy: number; energyCap: number };
 type CardNode = {
   card: BattleCard; element: HTMLButtonElement; pose: Pose;
   vx: number; vy: number; va: number; vs: number;
@@ -27,6 +31,8 @@ const DISCARD_STAGGER = 0.035;
 const DEAL_FLIGHT = 0.34;
 const DEAL_LAND = 0.1;
 const DEAL_STAGGER = 0.04;
+const SETTLEMENT_SCORE_DURATION = 460;
+const SETTLEMENT_IMPACT = 0.065;
 const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -72,12 +78,21 @@ export class BattleView {
   private drag: { id: number; pointer: number; x: number; y: number; startX: number; startY: number; moved: boolean; condensed: boolean } | null = null;
   private noticeTimer = 0;
   private resultTimer = 0;
+  private combatAnimating = false;
+  private settlementDisplay: SettlementDisplay | null = null;
+  private settlementCues: Array<{ at: number; run: () => void }> = [];
+  private settlementElapsed = 0;
+  private settlementHold = 0;
   private turnPause = 0;
   private revealBeforeDiscard = 0;
   private turnCue: 'none' | 'enemy-strike' | 'player-deal' = 'none';
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  constructor(private readonly settings: BoardSettings, private readonly board: StoneBoard) {
+  constructor(
+    private readonly settings: BoardSettings,
+    private readonly board: StoneBoard,
+    private readonly fighters: FighterCards,
+  ) {
     this.root.className = 'battle-ui';
     this.root.setAttribute('aria-label', '卡牌战斗');
     this.hand.className = 'battle-hand';
@@ -287,22 +302,40 @@ export class BattleView {
       node.element.tabIndex = this.expanded && b.phase === 'player' && node.state === 'hand' ? 0 : -1;
     }
     this.setExpanded(this.expanded);
-    this.energy.innerHTML = `<strong>${b.energy}<small> / ${b.turnEnergy}</small></strong><span>上限 ${b.energyCap}${b.nextEnergy ? ` · 下回合 +${b.nextEnergy}` : ''}</span>`;
-    this.energy.setAttribute('aria-label', `剩余 ${b.energy} 点能量，本回合上限 ${b.turnEnergy}，永久能量上限 ${b.energyCap}`);
+    this.syncEnergyHud();
     this.drawPile.innerHTML = `<span class="battle-pile__back"></span><strong>${b.drawPile.length}</strong><span>抽牌堆</span>`;
     this.discardPile.innerHTML = `<span class="battle-pile__back"></span><strong>${b.discardPile.length}</strong><span>弃牌堆</span>`;
     this.drawPile.setAttribute('aria-label', `查看抽牌堆，${b.drawPile.length} 张`);
     this.discardPile.setAttribute('aria-label', `查看弃牌堆，${b.discardPile.length} 张`);
     this.end.disabled = b.phase !== 'player' || this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
-    this.end.textContent = b.phase === 'enemy' ? '敌人行动中' : b.phase === 'player' ? '结束回合' : '战斗结束';
-    this.turn.innerHTML = `<span>第 ${b.turn} 回合</span><small>${b.phase === 'player' ? '你的回合' : b.phase === 'enemy' ? '敌人回合' : '战斗结束'}</small>`;
+    this.syncTurnHud();
     const boardThreat = b.units.filter(unit => unit.owner === 'enemy').reduce((total, unit) => total + (unit.attack ?? 0), 0);
     this.intent.innerHTML = `<span>来袭伤害</span><strong>${b.intent + boardThreat}</strong>${boardThreat ? `<small>本体 ${b.intent} · 棋盘 +${boardThreat}</small>` : '<small>敌方意图</small>'}`;
     this.intent.hidden = b.phase === 'won' || b.phase === 'lost';
-    this.guard.textContent = `护甲 ${b.block}`;
-    this.guard.classList.toggle('is-active', b.block > 0);
-    this.guard.hidden = b.block <= 0;
-    if (b.phase === 'won' || b.phase === 'lost') this.resultTimer = 0.65;
+    this.syncGuardHud();
+    if ((b.phase === 'won' || b.phase === 'lost') && !this.settlementCues.length && !this.combatAnimating) this.resultTimer = 0.65;
+  }
+
+  private syncEnergyHud(): void {
+    const b = this.battle;
+    const nextEnergy = this.settlementDisplay?.nextEnergy ?? b.nextEnergy;
+    const energyCap = this.settlementDisplay?.energyCap ?? b.energyCap;
+    this.energy.innerHTML = `<strong>${b.energy}<small> / ${b.turnEnergy}</small></strong><span>上限 ${energyCap}${nextEnergy ? ` · 下回合 +${nextEnergy}` : ''}</span>`;
+    this.energy.setAttribute('aria-label', `剩余 ${b.energy} 点能量，本回合上限 ${b.turnEnergy}，永久能量上限 ${energyCap}${nextEnergy ? `，下回合储备 ${nextEnergy} 点` : ''}`);
+  }
+
+  private syncGuardHud(): void {
+    const armor = this.settlementDisplay?.armor ?? this.battle.block;
+    this.guard.textContent = `护甲 ${armor}`;
+    this.guard.classList.toggle('is-active', armor > 0);
+    this.guard.hidden = armor <= 0;
+  }
+
+  private syncTurnHud(): void {
+    const b = this.battle;
+    const settling = this.settlementCues.length > 0;
+    this.end.textContent = this.combatAnimating ? '我方攻击中' : settling ? '棋盘结算中' : b.phase === 'enemy' ? '敌人行动中' : b.phase === 'player' ? '结束回合' : '战斗结束';
+    this.turn.innerHTML = `<span>第 ${b.turn} 回合</span><small>${this.combatAnimating ? '我方攻击' : settling ? '棋盘结算' : b.phase === 'player' ? '你的回合' : b.phase === 'enemy' ? '敌人回合' : '战斗结束'}</small>`;
   }
 
   private canDrop(id: number, x: number, y: number): boolean {
@@ -521,29 +554,202 @@ export class BattleView {
       node.element.style.pointerEvents = 'none';
       node.element.setAttribute('aria-hidden', 'true');
     });
+    const armorBeforeSettlement = this.battle.block;
+    const foeHpBeforeSettlement = this.battle.foeHp;
+    const nextEnergyBeforeSettlement = this.battle.nextEnergy;
+    const energyCapBeforeSettlement = this.battle.energyCap;
     const settlement = this.battle.endTurn();
     if (!settlement) return;
-    this.board.pulseSettlement(settlement.unitIds);
-    this.settlement.innerHTML = [
-      settlement.damage ? `<span class="battle-settlement__attack">⚔ 伤害 ${settlement.damage}</span>` : '',
-      settlement.armor ? `<span class="battle-settlement__armor">◆ 护甲 ${settlement.armor}</span>` : '',
-      settlement.energy ? `<span class="battle-settlement__energy">✦ 储能 +${settlement.energy}</span>` : '',
-      settlement.mined ? `<span class="battle-settlement__mine">⛏ 能量上限 +${settlement.mined}</span>` : '',
-    ].filter(Boolean).join('') || '<span>棋盘结算 · 暂无产出</span>';
-    this.settlement.classList.add('is-visible');
-    window.setTimeout(() => this.settlement.classList.remove('is-visible'), 1900);
-    this.sync();
-    const layout = battleLayout(this.settings);
-    if (settlement.damage > 0) this.float(`-${settlement.damage} 结算伤害`, layout.foeX, layout.foeBottom - 72);
-    if (settlement.victory) {
-      this.message(`棋盘结算造成 ${settlement.damage} 点伤害，击败缝偶`);
-      this.turnCue = 'none';
-      return;
+    const totals = [
+      { label: '本回合伤害', value: settlement.damage, sign: '+', className: 'attack' },
+      { label: '获得护甲', value: settlement.armor, sign: '+', className: 'armor' },
+      { label: '储备能量', value: settlement.energy, sign: '+', className: 'energy' },
+      { label: '能量上限', value: settlement.mined, sign: '+', className: 'mine' },
+    ].filter(item => item.value > 0);
+    this.settlement.style.setProperty('--settlement-columns', String(Math.max(1, totals.length)));
+    this.settlement.innerHTML = totals.length
+      ? `<div class="battle-settlement__heading">棋盘结算</div><div class="battle-settlement__stats">${totals.map(item => `<div class="battle-settlement__stat battle-settlement__${item.className}"><small>${item.label}</small><strong>${item.sign}<span data-score="${item.className}" data-target="${item.value}">0</span></strong></div>`).join('')}</div>`
+      : '<div class="battle-settlement__heading">棋盘结算</div><div class="battle-settlement__empty">棋盘暂无产出</div>';
+    this.settlement.classList.add('is-scoring', 'is-visible');
+    this.noticeTimer = 0;
+    this.notice.classList.remove('is-visible');
+    if (this.reduced.matches) {
+      for (const counter of this.settlement.querySelectorAll<HTMLElement>('[data-score]')) {
+        counter.textContent = counter.dataset.target ?? '0';
+      }
     }
-    this.message(settlement.mined ? `开采完成：能量上限 +${settlement.mined}（永久）` : '敌人回合 · 棋盘随从开始结算');
-    this.turnCue = 'enemy-strike';
+    const settlementDuration = this.animateBoardSettlement(
+      settlement,
+      armorBeforeSettlement,
+      foeHpBeforeSettlement,
+      nextEnergyBeforeSettlement,
+      energyCapBeforeSettlement,
+    );
+    this.settlementHold = settlementDuration + 0.72;
+    this.sync();
+    this.resultTimer = 0;
+    this.turnCue = 'none';
+    this.live.textContent = `棋盘结算：伤害 ${settlement.damage}，护甲 ${settlement.armor}，储能 ${settlement.energy}`;
     this.turnPause = this.reduced.matches ? 0.05
       : leaving.length ? DISCARD_FLIGHT + (leaving.length - 1) * DISCARD_STAGGER + 0.08 : 0.08;
+  }
+
+  private animateBoardSettlement(
+    settlement: BoardSettlement,
+    armor: number,
+    foeHp: number,
+    nextEnergy: number,
+    energyCap: number,
+  ): number {
+    this.settlementCues = [];
+    this.settlementElapsed = 0;
+    // Keep enemy health at its pre-settlement value until the portrait makes contact.
+    this.settlementDisplay = this.reduced.matches
+      ? { attack: settlement.damage, armor: this.battle.block, foeHp, nextEnergy: this.battle.nextEnergy, energyCap: this.battle.energyCap }
+      : { attack: 0, armor, foeHp, nextEnergy, energyCap };
+    this.fighters.setSettlementPreview(this.settlementDisplay);
+    if (this.reduced.matches) {
+      this.settlementCues.push({ at: 0.18, run: () => this.finishBoardSettlement(settlement) });
+      return 0.18;
+    }
+    const mined = new Set(settlement.minedIds);
+    const sources = this.battle.units
+      .filter(unit => unit.owner === 'player' && settlement.unitIds.includes(unit.id))
+      .sort((a, b) => a.row - b.row || a.col - b.col)
+      .map(unit => {
+        const parts: ScorePart[] = [];
+        if (unit.attack) parts.push({ kind: 'attack', value: unit.attack });
+        if (unit.armor) parts.push({ kind: 'armor', value: unit.armor });
+        if (unit.energy) parts.push({ kind: 'energy', value: unit.energy });
+        if (mined.has(unit.id)) parts.push({ kind: 'mine', value: 1 });
+        return { unit, parts };
+      }).filter(source => source.parts.length > 0);
+    if (!sources.length) {
+      this.settlementCues.push({ at: 0.24, run: () => this.finishBoardSettlement(settlement) });
+      return 0.24;
+    }
+
+    // One clock controls the source pulse, score impact and turn transition.
+    const heading = this.settlement.querySelector<HTMLElement>('.battle-settlement__heading');
+    if (heading) heading.textContent = `棋盘结算 · 0 / ${sources.length}`;
+    // Keep individual cells readable, compressing the cadence on a crowded board.
+    const step = Math.max(0.06, Math.min(0.145, 1 / Math.max(1, sources.length - 1)));
+    const lead = 0.09;
+    sources.forEach(({ unit, parts }, index) => {
+      const at = lead + index * step;
+      this.settlementCues.push({ at, run: () => {
+        this.board.pulseSettlement([unit.id]);
+        this.popSettlementScore(parts, unit.col, unit.row, unit.id);
+      }});
+      this.settlementCues.push({ at: at + SETTLEMENT_IMPACT, run: () => {
+        const running = this.settlementDisplay;
+        if (!running) return;
+        for (const part of parts) {
+          const counter = this.settlement.querySelector<HTMLElement>(`[data-score="${part.kind}"]`);
+          if (counter) this.incrementSettlementScore(counter, part.value);
+          if (part.kind === 'attack') running.attack += part.value;
+          if (part.kind === 'armor') running.armor += part.value;
+          if (part.kind === 'energy') running.nextEnergy += part.value;
+          if (part.kind === 'mine') running.energyCap += part.value;
+        }
+        this.fighters.setSettlementPreview({ ...running });
+        this.syncGuardHud();
+        this.syncEnergyHud();
+        if (heading) heading.textContent = `棋盘结算 · ${index + 1} / ${sources.length}`;
+      }});
+    });
+    const duration = lead + (sources.length - 1) * step + SETTLEMENT_SCORE_DURATION / 1000;
+    this.settlementCues.push({ at: duration, run: () => this.finishBoardSettlement(settlement) });
+    this.settlementCues.sort((a, b) => a.at - b.at);
+    return duration;
+  }
+
+  private finishBoardSettlement(settlement: BoardSettlement): void {
+    this.settlement.classList.remove('is-scoring');
+    const heading = this.settlement.querySelector<HTMLElement>('.battle-settlement__heading');
+    if (heading) heading.textContent = '本回合合计';
+    const complete = () => {
+      this.combatAnimating = false;
+      this.settlementDisplay = null;
+      this.fighters.setSettlementPreview(null);
+      this.syncGuardHud();
+      this.syncEnergyHud();
+      this.syncTurnHud();
+      if (settlement.victory) {
+        this.resultTimer = 0.26;
+        this.live.textContent = `造成 ${settlement.damage} 点伤害，击败缝偶`;
+      } else {
+        this.turnCue = 'enemy-strike';
+        this.turnPause = Math.max(this.turnPause, 0.16);
+      }
+    };
+    if (settlement.damage <= 0) {
+      complete();
+      return;
+    }
+    this.combatAnimating = true;
+    this.syncTurnHud();
+    const duration = this.fighters.playStrike({
+      damage: settlement.damage,
+      reducedMotion: this.reduced.matches,
+      onImpact: () => {
+        if (this.settlementDisplay) {
+          this.settlementDisplay.foeHp = this.battle.foeHp;
+          this.fighters.setSettlementPreview({ ...this.settlementDisplay });
+        }
+        this.live.textContent = `夜羽击中缝偶，造成 ${settlement.damage} 点伤害`;
+      },
+      onComplete: complete,
+    });
+    this.settlementHold = duration + 0.3;
+  }
+
+  private updateSettlement(dt: number): void {
+    if (this.settlementCues.length) {
+      this.settlementElapsed += dt;
+      while (this.settlementCues.length && this.settlementCues[0]!.at <= this.settlementElapsed) {
+        this.settlementCues.shift()!.run();
+      }
+    }
+    if (this.settlementHold > 0) {
+      this.settlementHold -= dt;
+      if (this.settlementHold <= 0) this.settlement.classList.remove('is-visible', 'is-scoring');
+    }
+  }
+
+  private popSettlementScore(parts: ScorePart[], col: number, row: number, unitId: number): void {
+    const center = boardCellCenter(this.settings, col, row);
+    const scale = battleLayout(this.settings).scale * Math.min(1.1, this.settings.tileSize / 126);
+    const labels = { attack: '伤害', armor: '护甲', energy: '储能', mine: '上限' };
+    const score = document.createElement('div');
+    score.className = 'battle-score';
+    score.dataset.unitId = String(unitId);
+    score.style.left = `${center.x}px`;
+    score.style.top = `${center.y - 10 * scale}px`;
+    score.style.setProperty('--score-scale', String(scale));
+    // A unit with two effects gets two aligned rows in ONE popup, never overlapping popups.
+    score.innerHTML = `<div class="battle-score__body">${parts.map(part => `<div class="battle-score__row battle-score--${part.kind}"><strong>+${part.value}</strong><span class="battle-score__unit">分</span><span class="battle-score__kind">${labels[part.kind]}</span></div>`).join('')}</div>`;
+    this.root.append(score);
+    const body = score.firstElementChild!;
+    const animation = body.animate([
+      { opacity: 0, transform: 'translateY(8px) scale(.82, .72)', offset: 0, easing: 'cubic-bezier(.12,.8,.24,1)' },
+      { opacity: 1, transform: 'translateY(-8px) scale(1.12, 1.16)', offset: 0.14, easing: 'cubic-bezier(.2,.75,.3,1)' },
+      { opacity: 1, transform: 'translateY(-6px) scale(1)', offset: 0.3 },
+      { opacity: 1, transform: 'translateY(-10px) scale(1)', offset: 0.72, easing: 'cubic-bezier(.4,0,.8,.5)' },
+      { opacity: 0, transform: 'translateY(-32px) scale(.98)', offset: 1 },
+    ], { duration: SETTLEMENT_SCORE_DURATION, fill: 'both' });
+    animation.finished.then(() => score.remove()).catch(() => score.remove());
+  }
+
+  private incrementSettlementScore(counter: HTMLElement, amount: number): void {
+    counter.textContent = String(Number(counter.textContent ?? 0) + amount);
+    const number = counter.parentElement;
+    if (!number || this.reduced.matches) return;
+    for (const animation of number.getAnimations()) animation.cancel();
+    number.animate([
+      { transform: 'translateY(-2px) scale(1.14)', filter: 'brightness(1.25)' },
+      { transform: 'translateY(0) scale(1)', filter: 'brightness(1)' },
+    ], { duration: 145, easing: 'cubic-bezier(.16,.85,.25,1)' });
   }
 
   private advanceTurnCue(): void {
@@ -604,6 +810,17 @@ export class BattleView {
       for (const node of this.departing) this.removeVisual(node);
       this.nodes.clear();
       this.departing.length = 0;
+      this.settlementCues = [];
+      this.settlementElapsed = this.settlementHold = 0;
+      for (const score of this.root.querySelectorAll('.battle-score')) {
+        for (const animation of score.getAnimations({ subtree: true })) animation.cancel();
+        score.remove();
+      }
+      this.fighters.cancelStrike();
+      this.combatAnimating = false;
+      this.fighters.setSettlementPreview(null);
+      this.settlementDisplay = null;
+      this.settlement.classList.remove('is-visible', 'is-scoring');
       this.resultTimer = 0;
       this.revealBeforeDiscard = 0;
       this.turnPause = 0;
@@ -695,6 +912,7 @@ export class BattleView {
   }
 
   update(dt: number): void {
+    this.updateSettlement(dt);
     if (this.resultTimer > 0) { this.resultTimer -= dt; if (this.resultTimer <= 0) this.showResult(); }
     if (this.noticeTimer > 0) { this.noticeTimer -= dt; if (this.noticeTimer <= 0) this.notice.classList.remove('is-visible'); }
     if (this.revealBeforeDiscard > 0) {
@@ -704,7 +922,8 @@ export class BattleView {
         this.finishEndTurn();
       }
     }
-    if (this.turnPause > 0) { this.turnPause -= dt; if (this.turnPause <= 0) this.advanceTurnCue(); }
+    this.turnPause = Math.max(0, this.turnPause - dt);
+    if (this.turnPause === 0 && this.turnCue !== 'none' && !this.settlementCues.length && !this.combatAnimating) this.advanceTurnCue();
     this.layoutHud();
     const layout = battleLayout(this.settings);
     this.intent.style.left = `${layout.foeX}px`;
@@ -765,7 +984,7 @@ export class BattleView {
           node.landed = true;
         }
         node.element.style.opacity = String(1 - fold);
-        if (t > PLAY_FLIGHT + PLAY_SETTLE) {
+        if (t >= PLAY_FLIGHT + PLAY_SETTLE) {
           this.removeVisual(node);
           if (this.nodes.get(id) === node) this.nodes.delete(id);
           this.placementAnimating = false;

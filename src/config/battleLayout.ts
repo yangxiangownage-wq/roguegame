@@ -23,6 +23,16 @@ export function battleLayout(settings: BoardSettings) {
   };
 }
 
+/** Cell center in the 1920×1080 stage coordinate system after scene scaling. */
+export function boardCellCenter(settings: BoardSettings, col: number, row: number) {
+  const m = boardMetrics(settings);
+  const { scale, centerY } = battleLayout(settings);
+  return {
+    x: 960 + (m.x + col * m.pitch + settings.tileSize / 2 - 960) * scale,
+    y: centerY + (m.y + row * m.pitch + settings.tileSize / 2 - 540) * scale,
+  };
+}
+
 /** Grid gaps and the area outside the board are deliberately not valid targets. */
 export function boardTarget(settings: BoardSettings, x: number, y: number) {
   const layout = battleLayout(settings);
