@@ -1,0 +1,224 @@
+#design-root.card-editor-stage,
+.design-root.card-editor-stage {
+  background: #1a1c20;
+}
+
+.card-editor-preview {
+  position: absolute;
+  left: 760px;
+  top: 150px;
+  z-index: 4;
+  width: 200px;
+  height: 300px;
+  transform: scale(2.15);
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+.card-editor-preview .hand-card {
+  position: relative;
+  pointer-events: none;
+}
+
+.card-editor-preview .hand-card__title {
+  top: 160px;
+}
+
+.card-editor-preview .hand-card__kind {
+  top: 186px;
+  letter-spacing: 3px;
+}
+
+.card-editor-preview .hand-card__stats {
+  position: absolute;
+  z-index: 3;
+  top: 204px;
+  left: 12px;
+  right: 12px;
+  color: #d7c49a;
+  font: 600 12px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  letter-spacing: 1px;
+}
+
+.card-editor-preview .hand-card__description {
+  top: 224px;
+  font-size: 12px;
+}
+
+.card-editor-preview .hand-card--consume .hand-card__kind {
+  color: #d4a07a;
+}
+
+.inspector.card-inspector {
+  width: 400px;
+  max-height: 980px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.inspector.card-inspector .inspector-body {
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 0 14px 8px;
+}
+
+.card-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  color: #ddd;
+  text-align: left;
+  background: #1e1e1e;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 14px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  cursor: pointer;
+}
+
+.card-list button.is-active {
+  color: #f4e6c8;
+  border-color: #4a90d9;
+  background: #243044;
+}
+
+.card-list__cost {
+  width: 22px;
+  color: #e6d08a;
+  font: 700 14px Georgia, serif;
+}
+
+.card-list__persist {
+  margin-left: auto;
+  color: #9ad;
+  font-size: 12px;
+}
+
+.inspector-row-stack {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 14px;
+}
+
+.inspector-textarea {
+  width: 100%;
+  min-height: 72px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  resize: vertical;
+  color: #eee;
+  background: #1e1e1e;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 14px/1.4 "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+.inspector-textarea:focus {
+  outline: none;
+  border-color: #4a90d9;
+  background: #242424;
+}
+
+.inspector-hint {
+  margin: 0 14px 8px 106px;
+  color: #8a8a8a;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.persist-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.persist-toggle button {
+  height: 30px;
+  color: #ddd;
+  background: #1e1e1e;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 14px/1 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  cursor: pointer;
+}
+
+.persist-toggle button.is-active {
+  color: #f4e6c8;
+  border-color: #4a90d9;
+  background: #243044;
+}
+
+.art-presets {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 0 14px 8px 106px;
+}
+
+.art-presets button {
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  background: #1a1a1a;
+  border: 1px solid #111;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.art-presets button.is-active {
+  border-color: #4a90d9;
+}
+
+.art-presets img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.art-file-btn {
+  width: 100%;
+  height: 30px;
+  color: #eee;
+  background: #2a2a2a;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 13px/1 "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+
+.art-file-btn:hover {
+  background: #333;
+}
+
+.inspector-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px 14px 8px;
+}
+
+.inspector-split button {
+  height: 32px;
+  color: #eee;
+  background: #2a2a2a;
+  border: 1px solid #111;
+  border-radius: 2px;
+  font: 14px/1 "PingFang SC", sans-serif;
+  cursor: pointer;
+}
+
+.inspector-split button:hover {
+  background: #333;
+}
