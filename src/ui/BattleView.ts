@@ -133,7 +133,7 @@ export class BattleView {
     this.pileDialog.setAttribute('aria-modal', 'true');
     this.root.append(this.turn, this.settlement, this.intent, this.guard, this.energy, this.drawPile, this.discardPile, this.end, this.handSurface, this.hand, this.placementTarget, this.handToggle, this.notice, this.live, this.result, this.pileDialog);
     document.getElementById('design-root')!.append(this.root);
-    this.battle.configureBoard(settings.cols, settings.rows, board.getGoldCells());
+    this.battle.configureBoard(settings.cols, settings.rows, []);
     this.board.syncUnits(this.battle.units);
     window.addEventListener('pointerdown', event => {
       if (event.button !== 0 || this.drag || !this.pileDialog.hidden || !this.result.hidden) return;

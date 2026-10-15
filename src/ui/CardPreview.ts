@@ -1,4 +1,4 @@
-import { persistLabel, type CatalogCard } from '@/config/catalog';
+import { artUrl, persistLabel, type CatalogCard } from '@/config/catalog';
 
 export function mountCardPreview(root: HTMLElement): (card: CatalogCard) => void {
   root.classList.add('card-editor-preview');
@@ -23,7 +23,7 @@ export function mountCardPreview(root: HTMLElement): (card: CatalogCard) => void
 
   return (card: CatalogCard) => {
     cardEl.classList.toggle('hand-card--consume', card.persist === 'consume');
-    img.src = card.art || '/assets/icons/attack.png';
+    img.src = artUrl(card.art);
     cost.textContent = String(card.cost);
     title.textContent = card.title || '未命名';
     kind.textContent = persistLabel(card.persist);

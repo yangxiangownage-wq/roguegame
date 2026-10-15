@@ -1,5 +1,4 @@
 import {
-  ART_PRESETS,
   COST_MAX,
   COST_MIN,
   DESC_MAX,
@@ -7,7 +6,11 @@ import {
   STAT_MAX,
   STAT_MIN,
   TITLE_MAX,
+  artKey,
+  artPresets,
+  artUrl,
   createCatalogCard,
+  matchCharArt,
   persistLabel,
   readArtFile,
   saveCatalog,
@@ -137,18 +140,22 @@ export function mountCardInspector(
   artFileWrap.append(artBtn, artFile);
   artRow.append(artLabel, artFileWrap);
   fields.append(artRow);
+  const artHint = document.createElement('p');
+  artHint.className = 'inspector-hint';
+  artHint.textContent = 'chars 目录里的立绘会自动出现在下面。';
+  fields.append(artHint);
   const presets = document.createElement('div');
   presets.className = 'art-presets';
-  const presetBtns = ART_PRESETS.map((preset) => {
+  const presetBtns = artPresets().map((preset) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.title = preset.label;
     const thumb = document.createElement('img');
-    thumb.src = preset.src;
+    thumb.src = artUrl(preset.src);
     thumb.alt = preset.label;
     btn.append(thumb);
     presets.append(btn);
-    return { btn, src: preset.src };
+    return { btn, src: artKey(preset.src) };
   });
   fields.append(presets);
   body.append(fields);
@@ -194,7 +201,7 @@ export function mountCardInspector(
     }
     persistHint.textContent = PERSIST_OPTIONS.find((o) => o.value === card.persist)?.hint ?? '';
     for (const item of presetBtns) {
-      item.btn.classList.toggle('is-active', item.src === card.art);
+      item.btn.classList.toggle('is-active', item.src === artKey(card.art));
     }
     renderList();
     onChange();
@@ -257,7 +264,7 @@ export function mountCardInspector(
     artFile.value = '';
     if (!file) return;
     try {
-      current().art = await readArtFile(file);
+      current().art = matchCharArt(file.name) ?? await readArtFile(file);
       markDirty();
       fill();
     } catch {

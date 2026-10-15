@@ -41,7 +41,6 @@ export class GameApp {
     const hud = document.querySelector<HTMLElement>('#hud-inspector');
     if (!hud) throw new Error('#hud-inspector missing');
     mountHudInspector(hud, this.settings, { ...save, hudHidden: true });
-    this.board.seedGold(this.settings.cols, this.settings.rows);
     this.battleView = new BattleView(this.settings, this.board, this.fighters);
     this.fit = applyDesignStage();
     this.bindResize();

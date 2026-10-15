@@ -1,3 +1,5 @@
+import { CHAR_ART } from 'virtual:char-art';
+
 export type PersistKind = 'permanent' | 'consume';
 
 export type CatalogCard = {
@@ -30,13 +32,40 @@ export const PERSIST_OPTIONS: Array<{ value: PersistKind; label: string; hint: s
   { value: 'consume', label: '消耗', hint: '结算一次后失效，卡牌仍占格。' },
 ];
 
-export const ART_PRESETS: Array<{ label: string; src: string }> = [
-  { label: '剑', src: '/assets/icons/attack.png' },
-  { label: '英雄', src: '/assets/chars/hero.png' },
-  { label: '敌人', src: '/assets/chars/foe.png' },
-  { label: '矿工', src: '/assets/chars/slave.png' },
-  { label: '金矿', src: '/assets/icons/gold-mine.png?v=3' },
-];
+const CHAR_LABELS: Record<string, string> = {
+  hero: '英雄',
+  foe: '敌人',
+  slave: '矿工',
+  'dwarf-musketeer': '矮人火枪手',
+  'dwarf-rifleman': '矮人步枪手',
+};
+
+export function artKey(src: string): string {
+  return src.split('?')[0] || src;
+}
+
+export function artUrl(src: string): string {
+  const key = artKey(src);
+  const found = CHAR_ART.find((item) => item.src === key);
+  if (found) return `${found.src}?v=${found.version}`;
+  return src || '/assets/icons/attack.png';
+}
+
+export function matchCharArt(fileName: string): string | null {
+  const found = CHAR_ART.find((item) => item.src.endsWith(`/${fileName}`));
+  return found?.src ?? null;
+}
+
+export function artPresets(): Array<{ label: string; src: string }> {
+  return [
+    { label: '剑', src: '/assets/icons/attack.png' },
+    { label: '金矿', src: '/assets/icons/gold-mine.png?v=3' },
+    ...CHAR_ART.map((item) => ({
+      label: CHAR_LABELS[item.name] ?? item.name,
+      src: item.src,
+    })),
+  ];
+}
 
 const SAVE_KEY = 'roguegame.card-catalog';
 

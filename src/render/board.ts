@@ -22,27 +22,9 @@ const ICON_BUF = 256;
 
 type Cell = { col: number; row: number };
 
-/** A few mines, spread across the board, stable for a given size. */
-export function goldMineCells(cols: number, rows: number): Cell[] {
-  const total = cols * rows;
-  if (total <= 0) return [];
-  const count = Math.max(2, Math.min(total - 1, Math.round(total / 8)));
-  const stride = Math.max(1, Math.floor(total / count));
-  const cells: Cell[] = [];
-  const used = new Set<string>();
-  let n = Math.floor(cols / 2);
-  while (cells.length < count && used.size < total) {
-    const idx = n % total;
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    const key = cellKey(col, row);
-    if (!used.has(key)) {
-      used.add(key);
-      cells.push({ col, row });
-    }
-    n += stride;
-  }
-  return cells;
+/** Mines are deferred for V1; the board starts empty. */
+export function goldMineCells(_cols: number, _rows: number): Cell[] {
+  return [];
 }
 
 type TileFx = {
