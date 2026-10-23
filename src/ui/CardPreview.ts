@@ -3,9 +3,11 @@ import {
   TEXT_NUDGE_MAX,
   TEXT_NUDGE_MIN,
   TEXT_SLOTS,
+  artKey,
   artUrl,
+  cardKindLabel,
+  cardStatsText,
   isTextSlot,
-  persistLabel,
   type CardTextLayout,
   type CatalogCard,
   type TextSlot,
@@ -113,11 +115,13 @@ export function mountCardPreview(
   return {
     paint: (card, nextLayout, selected) => {
       cardEl.classList.toggle('hand-card--consume', card.persist === 'consume');
+      cardEl.classList.toggle('hand-card--demon', card.school === 'demon');
+      cardEl.classList.toggle('hand-card--imp', artKey(card.art).includes('/imp.'));
       img.src = artUrl(card.art);
       nodes.cost.textContent = String(card.cost);
       nodes.title.textContent = card.title || '未命名';
-      nodes.kind.textContent = persistLabel(card.persist);
-      nodes.stats.textContent = `攻 ${card.attack}  ·  甲 ${card.armor}`;
+      nodes.kind.textContent = cardKindLabel(card);
+      nodes.stats.textContent = cardStatsText(card);
       nodes.description.textContent = card.description;
       applyLayout(nextLayout, selected);
     },

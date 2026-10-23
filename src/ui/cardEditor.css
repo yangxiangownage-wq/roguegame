@@ -87,6 +87,10 @@
   color: #d4a07a;
 }
 
+.card-editor-preview .hand-card--demon .hand-card__kind {
+  color: #d48a78;
+}
+
 .inspector.card-inspector {
   width: 400px;
   max-height: 980px;
@@ -140,6 +144,10 @@
   margin-left: auto;
   color: #9ad;
   font-size: 12px;
+}
+
+.card-list__persist.is-demon {
+  color: #d48a78;
 }
 
 .inspector-row-stack {

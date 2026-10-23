@@ -1,16 +1,19 @@
 import { CHAR_ART } from 'virtual:char-art';
 
 export type PersistKind = 'permanent' | 'consume';
+export type CardSchool = 'none' | 'demon';
 
 export type CatalogCard = {
   id: string;
   title: string;
   cost: number;
   persist: PersistKind;
+  school: CardSchool;
   description: string;
   art: string;
   attack: number;
   armor: number;
+  blood: number;
 };
 
 export type CatalogSave = {
@@ -43,6 +46,8 @@ export const COST_MIN = 0;
 export const COST_MAX = 9;
 export const STAT_MIN = 0;
 export const STAT_MAX = 99;
+export const BLOOD_MIN = 0;
+export const BLOOD_MAX = 20;
 export const TITLE_MAX = 8;
 export const DESC_MAX = 80;
 
@@ -51,10 +56,16 @@ export const PERSIST_OPTIONS: Array<{ value: PersistKind; label: string; hint: s
   { value: 'consume', label: '消耗', hint: '结算一次后失效，卡牌仍占格。' },
 ];
 
+export const SCHOOL_OPTIONS: Array<{ value: CardSchool; label: string; hint: string }> = [
+  { value: 'none', label: '中立', hint: '每回合结算攻击或护甲。' },
+  { value: 'demon', label: '恶魔', hint: '留在棋盘上；每回合结算时扣自己的血，换取攻击。' },
+];
+
 const CHAR_LABELS: Record<string, string> = {
   hero: '英雄',
   foe: '敌人',
   slave: '矿工',
+  imp: '小恶魔',
   'dwarf-musketeer': '矮人火枪手',
   'dwarf-rifleman': '矮人步枪手',
 };
@@ -118,24 +129,59 @@ export function persistLabel(kind: PersistKind): string {
   return kind === 'consume' ? '消耗' : '永久';
 }
 
+export function isCardSchool(value: unknown): value is CardSchool {
+  return value === 'none' || value === 'demon';
+}
+
+export function schoolLabel(school: CardSchool): string {
+  return school === 'demon' ? '恶魔' : '中立';
+}
+
+export function cardKindLabel(card: CatalogCard): string {
+  return card.school === 'demon' ? '恶魔' : persistLabel(card.persist);
+}
+
+export function cardStatsText(card: CatalogCard): string {
+  if (card.school === 'demon') {
+    const parts = [`攻 ${card.attack}`, `血 ${card.blood}`];
+    if (card.armor) parts.push(`甲 ${card.armor}`);
+    return parts.join('  ·  ');
+  }
+  return `攻 ${card.attack}  ·  甲 ${card.armor}`;
+}
+
 export function createCatalogCard(partial: Partial<CatalogCard> = {}): CatalogCard {
+  const school: CardSchool = partial.school === 'demon' ? 'demon' : 'none';
   return {
     id: partial.id ?? uid(),
     title: partial.title ?? '打击',
     cost: clamp(partial.cost ?? 1, COST_MIN, COST_MAX),
     persist: partial.persist === 'consume' ? 'consume' : 'permanent',
+    school,
     description: partial.description ?? '留在棋盘上；每回合结算给左边 4 点攻击。',
     art: partial.art ?? '/assets/icons/attack.png',
     attack: clamp(partial.attack ?? 4, STAT_MIN, STAT_MAX),
     armor: clamp(partial.armor ?? 0, STAT_MIN, STAT_MAX),
+    blood: clamp(partial.blood ?? (school === 'demon' ? 1 : 0), BLOOD_MIN, BLOOD_MAX),
   };
 }
 
 export function createDefaultCatalog(): CatalogSave {
-  const card = createCatalogCard();
+  const strike = createCatalogCard();
+  const imp = createCatalogCard({
+    title: '小恶魔',
+    cost: 1,
+    persist: 'permanent',
+    school: 'demon',
+    blood: 1,
+    attack: 4,
+    armor: 0,
+    description: '留在棋盘上；每回合扣自己 1 点生命，结算 4 点攻击。',
+    art: '/assets/chars/imp.png',
+  });
   return {
-    cards: [card],
-    selectedId: card.id,
+    cards: [strike, imp],
+    selectedId: imp.id,
     panelX: 1480,
     panelY: 48,
     textLayout: createTextLayout(),
@@ -156,6 +202,7 @@ function parseCard(raw: unknown): CatalogCard | null {
   const description = typeof o.description === 'string' ? o.description.slice(0, DESC_MAX) : '';
   const art = typeof o.art === 'string' ? o.art : '';
   const persist: PersistKind = o.persist === 'consume' ? 'consume' : 'permanent';
+  const school: CardSchool = isCardSchool(o.school) ? o.school : 'none';
   const id = typeof o.id === 'string' && o.id ? o.id : uid();
   return createCatalogCard({
     id,
@@ -163,9 +210,11 @@ function parseCard(raw: unknown): CatalogCard | null {
     description,
     art,
     persist,
+    school,
     cost: readInt(o.cost, 1, COST_MIN, COST_MAX),
     attack: readInt(o.attack, 0, STAT_MIN, STAT_MAX),
     armor: readInt(o.armor, 0, STAT_MIN, STAT_MAX),
+    blood: readInt(o.blood, school === 'demon' ? 1 : 0, BLOOD_MIN, BLOOD_MAX),
   });
 }
 

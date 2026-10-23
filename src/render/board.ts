@@ -1,4 +1,4 @@
-import { PIECE_ART, type BoardUnit, type PieceKind } from '@/config/pieces';
+import { PIECE_ART, STANDING_PIECES, type BoardUnit, type PieceKind } from '@/config/pieces';
 import { boardMetrics, type BoardSettings } from '@/config/board';
 import {
   DISSOLVE_MASK,
@@ -155,6 +155,7 @@ export class StoneBoard {
     private readonly goldIcon: HTMLImageElement,
     private readonly slaveIcon: HTMLImageElement,
     private readonly threatIcon: HTMLImageElement,
+    private readonly impIcon: HTMLImageElement,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -171,14 +172,15 @@ export class StoneBoard {
   }
 
   static async create(): Promise<StoneBoard> {
-    const [tiles, attackIcon, goldIcon, slaveIcon, threatIcon] = await Promise.all([
+    const [tiles, attackIcon, goldIcon, slaveIcon, threatIcon, impIcon] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
       loadImage(PIECE_ART.mark),
       loadImage(PIECE_ART.gold),
       loadImage(PIECE_ART.slave),
       loadImage(PIECE_ART.threat),
+      loadImage(PIECE_ART.imp),
     ]);
-    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon, threatIcon);
+    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon, threatIcon, impIcon);
   }
 
   /** Enchanted destination highlight while the player is holding a card. */
@@ -360,6 +362,7 @@ export class StoneBoard {
     }
     for (const cell of rest) this.drawTile(g, s, ox, oy, pitch, cell);
     for (const cell of popping) this.drawTile(g, s, ox, oy, pitch, cell);
+    this.drawStandingPieces(g, s, ox, oy, pitch);
     this.drawDropGlow(g, s, ox, oy, spanW, spanH);
     this.drawMineHints(g, s, ox, oy, pitch);
   }
@@ -587,8 +590,10 @@ export class StoneBoard {
       g.fillStyle = `rgba(255, 233, 182, ${0.13 * fx.settleT / 0.32})`;
       g.fillRect(0, 0, size, size);
     }
-    this.drawAttackIcon(g, size, fx);
-    this.drawUnitBadge(g, size, fx);
+    if (!fx || !STANDING_PIECES.has(fx.kind)) {
+      this.drawAttackIcon(g, size, fx);
+      this.drawUnitBadge(g, size, fx);
+    }
     g.strokeStyle = 'rgba(232, 213, 174, .24)';
     g.lineWidth = 1;
     roundRect(g, 1, 1, size - 2, size - 2, radius);
@@ -622,9 +627,7 @@ export class StoneBoard {
     g.translate(-iconSize / 2, -iconSize / 2);
     drawDissolvingIcon(
       g,
-      fx.kind === 'gold' || fx.kind === 'energy' ? this.goldIcon
-        : fx.kind === 'slave' || fx.kind === 'guard' ? this.slaveIcon
-          : fx.kind === 'threat' ? this.threatIcon : this.attackIcon,
+      this.pieceIcon(fx.kind),
       iconSize,
       t,
       fx.iconSeed,
@@ -633,6 +636,75 @@ export class StoneBoard {
       this.iconBuf,
       this.iconBufCtx,
     );
+    g.restore();
+  }
+
+  private pieceIcon(kind: PieceKind): HTMLImageElement {
+    if (kind === 'gold' || kind === 'energy') return this.goldIcon;
+    if (kind === 'slave' || kind === 'guard') return this.slaveIcon;
+    if (kind === 'threat') return this.threatIcon;
+    if (kind === 'imp') return this.impIcon;
+    return this.attackIcon;
+  }
+
+  private drawStandingPieces(
+    g: CanvasRenderingContext2D,
+    s: BoardSettings,
+    ox: number,
+    oy: number,
+    pitch: number,
+  ): void {
+    const cells: Cell[] = [];
+    for (let row = 0; row < s.rows; row++) {
+      for (let col = 0; col < s.cols; col++) {
+        const fx = this.fx.get(cellKey(col, row));
+        if (fx?.iconOn && STANDING_PIECES.has(fx.kind) && fx.iconT > 0) cells.push({ col, row });
+      }
+    }
+    cells.sort((a, b) => a.row - b.row || a.col - b.col);
+    for (const cell of cells) this.drawStandingPiece(g, s, ox, oy, pitch, cell);
+  }
+
+  private drawStandingPiece(
+    g: CanvasRenderingContext2D,
+    s: BoardSettings,
+    ox: number,
+    oy: number,
+    pitch: number,
+    cell: Cell,
+  ): void {
+    const fx = this.fx.get(cellKey(cell.col, cell.row));
+    if (!fx?.iconOn) return;
+    const size = s.tileSize;
+    const t = fx.iconT;
+    const squash = fx.squash;
+    const pop = this.popScale(fx.popT);
+    const sc = spawnScale(t) * (1 - squash * 0.08) * pop;
+    const iconSize = size * 1.22;
+    const tx = ox + cell.col * pitch;
+    const ty = oy + cell.row * pitch;
+    const triggerTime = 0.32 - (fx.settleT ?? 0);
+    const pulse = fx.settleT > 0 ? Math.sin(Math.PI * Math.min(1, triggerTime / 0.2)) : 0;
+    g.save();
+    g.translate(tx + size / 2, ty + size * 0.94);
+    g.translate(0, -size * 0.03 * pulse);
+    g.scale(sc * (1 + 0.04 * pulse), sc * (1 + 0.06 * pulse));
+    g.translate(-iconSize / 2, -iconSize);
+    drawDissolvingIcon(
+      g,
+      this.pieceIcon(fx.kind),
+      iconSize,
+      t,
+      fx.iconSeed,
+      this.mask,
+      this.maskCtx,
+      this.iconBuf,
+      this.iconBufCtx,
+    );
+    g.restore();
+    g.save();
+    g.translate(tx, ty);
+    this.drawUnitBadge(g, size, fx);
     g.restore();
   }
 

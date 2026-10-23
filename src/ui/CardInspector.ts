@@ -1,8 +1,11 @@
 import {
+  BLOOD_MAX,
+  BLOOD_MIN,
   COST_MAX,
   COST_MIN,
   DESC_MAX,
   PERSIST_OPTIONS,
+  SCHOOL_OPTIONS,
   STAT_MAX,
   STAT_MIN,
   TEXT_NUDGE_MAX,
@@ -13,13 +16,14 @@ import {
   artKey,
   artPresets,
   artUrl,
+  cardKindLabel,
   createCatalogCard,
   createTextLayout,
   matchCharArt,
-  persistLabel,
   readArtFile,
   saveCatalog,
   selectedCard,
+  type CardSchool,
   type CatalogCard,
   type CatalogSave,
   type PersistKind,
@@ -113,7 +117,36 @@ export function mountCardInspector(
   persistHint.className = 'inspector-hint';
   fields.append(persistHint);
 
+  const schoolRow = document.createElement('div');
+  schoolRow.className = 'inspector-row-stack';
+  const schoolLabelEl = document.createElement('span');
+  schoolLabelEl.className = 'inspector-label';
+  schoolLabelEl.textContent = '流派';
+  const schoolToggle = document.createElement('div');
+  schoolToggle.className = 'persist-toggle';
+  const schoolBtns = SCHOOL_OPTIONS.map((opt) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = opt.label;
+    btn.dataset.value = opt.value;
+    schoolToggle.append(btn);
+    return btn;
+  });
+  schoolRow.append(schoolLabelEl, schoolToggle);
+  fields.append(schoolRow);
+  const schoolHint = document.createElement('p');
+  schoolHint.className = 'inspector-hint';
+  fields.append(schoolHint);
+
   const attackRange = rangeRow(fields, '攻击', STAT_MIN, STAT_MAX);
+  const bloodWrap = document.createElement('div');
+  bloodWrap.className = 'school-blood';
+  const bloodRange = rangeRow(bloodWrap, '扣血', BLOOD_MIN, BLOOD_MAX);
+  const bloodHint = document.createElement('p');
+  bloodHint.className = 'inspector-hint';
+  bloodHint.textContent = '每回合结算时，左边失去这些生命。';
+  bloodWrap.append(bloodHint);
+  fields.append(bloodWrap);
   const armorRange = rangeRow(fields, '护甲', STAT_MIN, STAT_MAX);
 
   const descRow = document.createElement('div');
@@ -248,12 +281,18 @@ export function mountCardInspector(
     titleInput.value = card.title;
     costRange.set(card.cost);
     attackRange.set(card.attack);
+    bloodRange.set(card.blood);
     armorRange.set(card.armor);
     descInput.value = card.description;
     for (const btn of persistBtns) {
       btn.classList.toggle('is-active', btn.dataset.value === card.persist);
     }
     persistHint.textContent = PERSIST_OPTIONS.find((o) => o.value === card.persist)?.hint ?? '';
+    for (const btn of schoolBtns) {
+      btn.classList.toggle('is-active', btn.dataset.value === card.school);
+    }
+    schoolHint.textContent = SCHOOL_OPTIONS.find((o) => o.value === card.school)?.hint ?? '';
+    bloodWrap.hidden = card.school !== 'demon';
     for (const item of presetBtns) {
       item.btn.classList.toggle('is-active', item.src === artKey(card.art));
     }
@@ -277,7 +316,7 @@ export function mountCardInspector(
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.classList.toggle('is-active', card.id === save.selectedId);
-      btn.innerHTML = `<span class="card-list__cost">${card.cost}</span><span>${card.title || '未命名'}</span><span class="card-list__persist">${persistLabel(card.persist)}</span>`;
+      btn.innerHTML = `<span class="card-list__cost">${card.cost}</span><span>${card.title || '未命名'}</span><span class="card-list__persist${card.school === 'demon' ? ' is-demon' : ''}">${cardKindLabel(card)}</span>`;
       btn.addEventListener('click', () => {
         save.selectedId = card.id;
         fill();
@@ -301,6 +340,10 @@ export function mountCardInspector(
     current().attack = n;
     markDirty();
   });
+  bloodRange.onInput((n) => {
+    current().blood = n;
+    markDirty();
+  });
   armorRange.onInput((n) => {
     current().armor = n;
     markDirty();
@@ -312,6 +355,16 @@ export function mountCardInspector(
   for (const btn of persistBtns) {
     btn.addEventListener('click', () => {
       current().persist = (btn.dataset.value as PersistKind) ?? 'permanent';
+      markDirty();
+      fill();
+    });
+  }
+  for (const btn of schoolBtns) {
+    btn.addEventListener('click', () => {
+      const school: CardSchool = btn.dataset.value === 'demon' ? 'demon' : 'none';
+      const card = current();
+      card.school = school;
+      if (school === 'demon' && card.blood <= 0) card.blood = 1;
       markDirty();
       fill();
     });

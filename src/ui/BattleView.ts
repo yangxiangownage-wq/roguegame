@@ -20,7 +20,7 @@ type CardNode = {
   state: 'hand' | 'play' | 'discard'; elapsed: number; delay: number;
   layer: number;
 };
-const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png?v=2' };
+const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png?v=2', imp: '/assets/chars/imp.png?v=1' };
 const PILE_BUTTON = { width: 100, height: 125, backWidth: 62, backHeight: 89 };
 const DRAW_PILE = { left: 280, top: 940, scale: 0.8 };
 const DISCARD_PILE = { left: 1540, top: 985, scale: 0.65 };
@@ -237,10 +237,10 @@ export class BattleView {
   private createNode(card: BattleCard, delay: number): CardNode {
     const def = CARD_DEFS[card.key];
     const element = document.createElement('button');
-    element.className = `hand-card hand-card--${def.tone}`;
+    element.className = `hand-card hand-card--${def.tone} hand-card--${card.key}`;
     element.dataset.cardId = String(card.id);
     element.style.pointerEvents = 'none';
-    const placed = def.mines ? '矿工' : def.boardKind === 'guard' ? '护卫' : def.boardKind === 'energy' ? '雾影' : '攻击单位';
+    const placed = def.mines ? '矿工' : def.boardKind === 'imp' ? '小恶魔' : def.boardKind === 'guard' ? '护卫' : def.boardKind === 'energy' ? '雾影' : '攻击单位';
     element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，放置${placed}。${def.description.join(' ')}`);
     element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>`;
     element.addEventListener('pointerenter', () => { if (this.expanded && !this.isDealing() && !this.drag && this.battle.phase === 'player') this.hover = card.id; });

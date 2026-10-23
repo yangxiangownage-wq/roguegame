@@ -5,7 +5,7 @@ export type CardDefinition = {
   description: string[]; damage?: number; block?: number; draw?: number;
   energy?: number; nextEnergy?: number; comboDraw?: boolean;
   boardKind: Exclude<PieceKind, 'gold'>; boardDamage?: number; boardArmor?: number; boardEnergy?: number; mines?: boolean;
-  art: 'hero' | 'foe' | 'sword' | 'slave'; tone: string;
+  art: 'hero' | 'foe' | 'sword' | 'slave' | 'imp'; tone: string;
 };
 export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   blade: { title: '飞刃', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 4 点伤害。'], damage: 4, boardKind: 'mark', boardDamage: 4, art: 'sword', tone: 'crimson' },
@@ -14,12 +14,13 @@ export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   mist: { title: '雾影步', cost: 0, kind: '技能', description: ['留在棋盘上；每回合结算获得 6 点护甲，', '并为下回合储备 1 点能量。'], block: 6, nextEnergy: 1, boardKind: 'energy', boardArmor: 6, boardEnergy: 1, art: 'hero', tone: 'teal' },
   hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 5 点伤害，', '并为下回合储备 1 点能量。'], damage: 5, boardKind: 'mark', boardDamage: 5, boardEnergy: 1, art: 'sword', tone: 'amber' },
   slave: { title: '矿工', cost: 1, kind: '技能', description: ['留在棋盘上；相邻金矿时首次开采，', '永久增加 1 点能量上限。'], boardKind: 'slave', mines: true, art: 'slave', tone: 'crimson' },
+  imp: { title: '小恶魔', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 2 点伤害。'], damage: 2, boardKind: 'imp', boardDamage: 2, art: 'imp', tone: 'crimson' },
 };
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
 export type PlayResult = { ok: boolean; message: string; damage: number; block: number };
 export type BoardSettlement = { damage: number; armor: number; energy: number; mined: number; minedIds: number[]; unitIds: number[]; victory: boolean };
-const STARTING_DECK: CardKey[] = ['slave', 'blade', 'leap', 'slash', 'mist', 'hook', 'blade', 'leap', 'slash', 'blade', 'leap', 'slash', 'hook'];
+const STARTING_DECK: CardKey[] = ['imp', 'blade', 'leap', 'slash', 'mist', 'hook', 'blade', 'leap', 'slash', 'blade', 'leap', 'slave', 'hook'];
 
 /** Pure combat state. Animation timing lives in BattleView, never in the rules. */
 export class Battle {
