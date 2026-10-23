@@ -48,38 +48,41 @@
 }
 
 .card-editor-preview .hand-card__cost {
-  top: calc(-11px + var(--nudge-y, 0px));
-  left: calc(-12px + var(--nudge-x, 0px));
+  top: calc(-5px + var(--nudge-y, 0px));
+  left: calc(-5px + var(--nudge-x, 0px));
 }
 
 .card-editor-preview .hand-card__title {
-  top: calc(160px + var(--nudge-y, 0px));
-  left: calc(12px + var(--nudge-x, 0px));
-  right: calc(12px - var(--nudge-x, 0px));
+  top: calc(164px + var(--nudge-y, 0px));
+  left: calc(14px + var(--nudge-x, 0px));
+  right: calc(14px - var(--nudge-x, 0px));
 }
 
 .card-editor-preview .hand-card__kind {
   top: calc(186px + var(--nudge-y, 0px));
-  left: calc(40px + var(--nudge-x, 0px));
-  right: calc(40px - var(--nudge-x, 0px));
+  bottom: auto;
+  left: calc(14px + var(--nudge-x, 0px));
+  right: calc(14px - var(--nudge-x, 0px));
+  height: 18px;
   letter-spacing: 3px;
 }
 
 .card-editor-preview .hand-card__stats {
   position: absolute;
   z-index: 5;
-  top: calc(204px + var(--nudge-y, 0px));
-  left: calc(12px + var(--nudge-x, 0px));
-  right: calc(12px - var(--nudge-x, 0px));
-  color: #d7c49a;
-  font: 600 12px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
+  top: calc(202px + var(--nudge-y, 0px));
+  left: calc(14px + var(--nudge-x, 0px));
+  right: calc(14px - var(--nudge-x, 0px));
+  color: #cbb892;
+  font: 600 11px/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif;
   letter-spacing: 1px;
 }
 
 .card-editor-preview .hand-card__description {
-  top: calc(224px + var(--nudge-y, 0px));
-  left: calc(13px + var(--nudge-x, 0px));
-  right: calc(13px - var(--nudge-x, 0px));
+  top: calc(218px + var(--nudge-y, 0px));
+  left: calc(16px + var(--nudge-x, 0px));
+  right: calc(16px - var(--nudge-x, 0px));
+  bottom: 16px;
   font-size: 12px;
 }
 

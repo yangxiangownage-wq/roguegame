@@ -20,7 +20,13 @@ type CardNode = {
   state: 'hand' | 'play' | 'discard'; elapsed: number; delay: number;
   layer: number;
 };
-const ART = { hero: '/assets/chars/hero.png', foe: '/assets/chars/foe.png', sword: '/assets/icons/attack.png', slave: '/assets/chars/slave.png?v=2', imp: '/assets/chars/imp.png?v=1' };
+const ART = {
+  hero: '/assets/chars/iron-shield.png?v=1',
+  foe: '/assets/chars/antlers.png?v=1',
+  sword: '/assets/chars/antlers.png?v=1',
+  slave: '/assets/chars/coin-bag.png?v=1',
+  imp: '/assets/chars/druid.png?v=1',
+};
 const PILE_BUTTON = { width: 100, height: 125, backWidth: 62, backHeight: 89 };
 const DRAW_PILE = { left: 280, top: 940, scale: 0.8 };
 const DISCARD_PILE = { left: 1540, top: 985, scale: 0.65 };

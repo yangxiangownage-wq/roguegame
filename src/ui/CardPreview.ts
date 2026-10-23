@@ -116,7 +116,8 @@ export function mountCardPreview(
     paint: (card, nextLayout, selected) => {
       cardEl.classList.toggle('hand-card--consume', card.persist === 'consume');
       cardEl.classList.toggle('hand-card--demon', card.school === 'demon');
-      cardEl.classList.toggle('hand-card--imp', artKey(card.art).includes('/imp.'));
+      const key = artKey(card.art);
+      cardEl.classList.toggle('hand-card--imp', key.includes('/imp.') || key.includes('/druid.'));
       img.src = artUrl(card.art);
       nodes.cost.textContent = String(card.cost);
       nodes.title.textContent = card.title || '未命名';

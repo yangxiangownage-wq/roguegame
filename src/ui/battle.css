@@ -248,8 +248,17 @@
   isolation: isolate;
   transition: box-shadow .16s ease, filter .16s ease;
 }
+.hand-card__frame {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat;
+  pointer-events: none;
+  filter: saturate(.75);
+}
 .hand-card__art {
   position: absolute;
+  z-index: 1;
   inset: 8px 8px 126px;
   overflow: hidden;
   border-radius: 9px 9px 0 0;
@@ -257,29 +266,75 @@
 }
 .hand-card--crimson .hand-card__art { background: radial-gradient(ellipse at center, #714237, #241a19); }
 .hand-card--amber .hand-card__art { background: radial-gradient(ellipse at center, #735638, #292119); }
-.hand-card__art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 21%; pointer-events: none; }
-.hand-card--imp .hand-card__art { background: radial-gradient(ellipse at 50% 40%, #8a3a28, #1c1412 78%); }
-.hand-card--imp .hand-card__art img { object-fit: contain; object-position: 50% 62%; }
-.hand-card__art::after { content: ''; position: absolute; inset: 65% 0 0; background: linear-gradient(transparent, #211e1a); }
-.hand-card--amber .hand-card__art img { filter: sepia(.55) brightness(.82); transform: rotate(30deg) scale(1.2); }
-.hand-card__frame { position: absolute; inset: 0; z-index: 2; background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat; pointer-events: none; filter: saturate(.75); }
+.hand-card--imp .hand-card__art { background: radial-gradient(ellipse at 50% 40%, #3a3228, #1c1412 78%); }
+.hand-card__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 46%;
+  pointer-events: none;
+}
+.hand-card--imp .hand-card__art img { object-fit: contain; object-position: 50% 48%; }
+.hand-card--amber .hand-card__art img { filter: sepia(.45) brightness(.88); transform: none; }
+.hand-card__art::after {
+  content: '';
+  position: absolute;
+  inset: 65% 0 0;
+  background: linear-gradient(transparent, #211e1a);
+}
 .hand-card__cost {
   position: absolute;
-  top: -11px;
-  left: -12px;
-  z-index: 3;
-  width: 53px;
-  height: 53px;
+  top: -5px;
+  left: -5px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
-  background: url('/assets/cards/cost.png') center / contain no-repeat;
-  color: #fff0c8;
-  font: 700 30px Georgia, serif;
-  text-shadow: 0 2px 3px #17100b;
+  background: url('/assets/cards/cost.png?v=4') center / contain no-repeat;
+  color: #f6e7c4;
+  font: 700 16px Georgia, serif;
+  text-shadow: 0 1px 0 #2a1a10, 0 1px 3px #120806;
 }
-.hand-card__title { position: absolute; top: 168px; left: 12px; right: 12px; color: #f1e3c5; font: 650 20px "PingFang SC", sans-serif; letter-spacing: 1px; }
-.hand-card__kind { position: absolute; top: 199px; left: 40px; right: 40px; color: #bca681; font-size: 11px; letter-spacing: 4px; }
-.hand-card__description { position: absolute; top: 222px; left: 13px; right: 13px; color: #e2d4bb; font-size: 12.5px; line-height: 1.65; }
+.hand-card__title {
+  position: absolute;
+  z-index: 3;
+  top: 164px;
+  left: 14px;
+  right: 14px;
+  color: #f1e3c5;
+  font: 650 17px "PingFang SC", sans-serif;
+  letter-spacing: 1px;
+}
+.hand-card__kind {
+  position: absolute;
+  z-index: 3;
+  left: 14px;
+  right: 14px;
+  top: 186px;
+  bottom: auto;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: #b39a78;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-shadow: 0 1px 2px #140a08;
+}
+.hand-card__description {
+  position: absolute;
+  z-index: 3;
+  top: 218px;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  color: #d8cbb4;
+  font-size: 12px;
+  line-height: 1.55;
+}
 .hand-card.is-unaffordable .hand-card__cost { color: #efaa98; filter: saturate(.65); }
 .hand-card.is-unaffordable .hand-card__art { filter: saturate(.55) brightness(.72); }
 .hand-card.is-dragged { cursor: grabbing; }

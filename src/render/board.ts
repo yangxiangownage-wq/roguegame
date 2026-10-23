@@ -151,11 +151,7 @@ export class StoneBoard {
 
   private constructor(
     private readonly tiles: HTMLImageElement[],
-    private readonly attackIcon: HTMLImageElement,
-    private readonly goldIcon: HTMLImageElement,
-    private readonly slaveIcon: HTMLImageElement,
-    private readonly threatIcon: HTMLImageElement,
-    private readonly impIcon: HTMLImageElement,
+    private readonly icons: Record<PieceKind, HTMLImageElement>,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -172,15 +168,16 @@ export class StoneBoard {
   }
 
   static async create(): Promise<StoneBoard> {
-    const [tiles, attackIcon, goldIcon, slaveIcon, threatIcon, impIcon] = await Promise.all([
+    const kinds = Object.keys(PIECE_ART) as PieceKind[];
+    const [tiles, iconList] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
-      loadImage(PIECE_ART.mark),
-      loadImage(PIECE_ART.gold),
-      loadImage(PIECE_ART.slave),
-      loadImage(PIECE_ART.threat),
-      loadImage(PIECE_ART.imp),
+      Promise.all(kinds.map((kind) => loadImage(PIECE_ART[kind]))),
     ]);
-    return new StoneBoard(tiles, attackIcon, goldIcon, slaveIcon, threatIcon, impIcon);
+    const icons = {} as Record<PieceKind, HTMLImageElement>;
+    kinds.forEach((kind, index) => {
+      icons[kind] = iconList[index]!;
+    });
+    return new StoneBoard(tiles, icons);
   }
 
   /** Enchanted destination highlight while the player is holding a card. */
@@ -640,11 +637,7 @@ export class StoneBoard {
   }
 
   private pieceIcon(kind: PieceKind): HTMLImageElement {
-    if (kind === 'gold' || kind === 'energy') return this.goldIcon;
-    if (kind === 'slave' || kind === 'guard') return this.slaveIcon;
-    if (kind === 'threat') return this.threatIcon;
-    if (kind === 'imp') return this.impIcon;
-    return this.attackIcon;
+    return this.icons[kind] ?? this.icons.mark;
   }
 
   private drawStandingPieces(

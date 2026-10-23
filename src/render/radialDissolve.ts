@@ -3,7 +3,8 @@
 export const DISSOLVE_MASK = 56;
 export const DISSOLVE_SEC = 0.4;
 export const DISSOLVE_STAGGER_SEC = 0.1;
-export const ICON_FRAC = 1;
+/** In-tile tokens cover the cell; tile roundRect clips overflow. */
+export const ICON_FRAC = 1.36;
 
 const SOFT_FRAC = 0.16;
 const NOISE_FRAC = 0.11;

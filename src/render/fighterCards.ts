@@ -43,21 +43,21 @@ type FighterDef = {
 
 const FIGHTERS: FighterDef[] = [
   {
-    src: '/assets/chars/hero.png',
-    name: '夜羽',
+    src: '/assets/chars/druid.png?v=1',
+    name: '德鲁伊',
     atk: 0,
     armor: 0,
     hp: 20,
     maxHp: 20,
-    inner: '#34423d',
+    inner: '#2a241c',
   },
   {
-    src: '/assets/chars/foe.png',
-    name: '缝偶',
+    src: '/assets/chars/druid.png?v=1',
+    name: '德鲁伊',
     atk: 8,
     hp: 5,
     maxHp: 20,
-    inner: '#58352e',
+    inner: '#2a241c',
   },
 ];
 
@@ -363,12 +363,11 @@ export class FighterCards {
     g.fillStyle = backdrop;
     g.fillRect(ix, iy, iw, ih);
 
-    // Cover the portrait window; the frame masks the edges, the footer masks the bust.
     const portraitHeight = 376;
-    const scale = Math.max(iw / portrait.naturalWidth, portraitHeight / portrait.naturalHeight);
+    const scale = Math.min(iw / portrait.naturalWidth, portraitHeight / portrait.naturalHeight) * 1.08;
     const dw = portrait.naturalWidth * scale;
     const dh = portrait.naturalHeight * scale;
-    g.drawImage(portrait, x + (w - dw) / 2, iy + 4, dw, dh);
+    g.drawImage(portrait, x + (w - dw) / 2, iy + 8, dw, dh);
 
     const fade = g.createLinearGradient(0, y + 282, 0, y + 382);
     fade.addColorStop(0, 'rgba(23, 18, 17, 0)');
@@ -384,26 +383,26 @@ export class FighterCards {
     g.textAlign = 'left';
     g.fillStyle = IVORY;
     g.font = `600 26px ${LABEL_FONT}`;
-    g.fillText(f.name, x + 30, y + 372);
+    g.fillText(f.name, x + 22, y + 372);
     if (i === 0) {
       const displayedAttack = this.settlementPreview?.attack ?? f.atk;
       const displayedArmor = this.settlementPreview?.armor ?? f.armor ?? 0;
       g.font = `500 11px ${LABEL_FONT}`;
       g.fillStyle = '#d08b70';
       g.textAlign = 'left';
-      g.fillText('攻', x + 105, y + 374);
+      g.fillText('攻', x + 126, y + 374);
       g.textAlign = 'right';
       g.fillStyle = '#f0c0a9';
       g.font = '600 19px Georgia, serif';
-      g.fillText(String(displayedAttack), x + 158, y + 374);
+      g.fillText(String(displayedAttack), x + 168, y + 374);
       g.textAlign = 'left';
       g.fillStyle = '#92b69c';
       g.font = `500 11px ${LABEL_FONT}`;
-      g.fillText('甲', x + 178, y + 374);
+      g.fillText('甲', x + 184, y + 374);
       g.textAlign = 'right';
       g.fillStyle = '#c9e2d0';
       g.font = '600 19px Georgia, serif';
-      g.fillText(String(displayedArmor), x + w - 30, y + 374);
+      g.fillText(String(displayedArmor), x + w - 22, y + 374);
     } else {
       g.fillStyle = '#bcaa8b';
       g.font = `500 12px ${LABEL_FONT}`;
@@ -461,9 +460,8 @@ export class FighterCards {
     g.restore();
     g.restore();
 
-    // Keep the existing ornamental frame, with a restrained brass tint.
     g.save();
-    g.filter = 'saturate(0.62)';
+    g.filter = 'saturate(0.75)';
     g.drawImage(this.frame, x, y, w, h);
     g.restore();
   }

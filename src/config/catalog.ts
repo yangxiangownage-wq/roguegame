@@ -66,6 +66,11 @@ const CHAR_LABELS: Record<string, string> = {
   foe: '敌人',
   slave: '矿工',
   imp: '小恶魔',
+  druid: '德鲁伊',
+  'druid-token': '德鲁伊地块',
+  antlers: '鹿角',
+  'iron-shield': '铁木盾',
+  'coin-bag': '钱袋',
   'dwarf-musketeer': '矮人火枪手',
   'dwarf-rifleman': '矮人步枪手',
 };
@@ -177,7 +182,7 @@ export function createDefaultCatalog(): CatalogSave {
     attack: 4,
     armor: 0,
     description: '留在棋盘上；每回合扣自己 1 点生命，结算 4 点攻击。',
-    art: '/assets/chars/imp.png',
+    art: '/assets/chars/druid.png',
   });
   return {
     cards: [strike, imp],
