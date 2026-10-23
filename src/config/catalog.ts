@@ -18,7 +18,26 @@ export type CatalogSave = {
   selectedId: string;
   panelX: number;
   panelY: number;
+  textLayout: CardTextLayout;
+  textSlot: TextSlot;
 };
+
+export const TEXT_SLOTS = ['cost', 'title', 'kind', 'stats', 'description'] as const;
+export type TextSlot = (typeof TEXT_SLOTS)[number];
+export type TextNudge = { x: number; y: number };
+export type CardTextLayout = Record<TextSlot, TextNudge>;
+
+export const TEXT_SLOT_LABELS: Record<TextSlot, string> = {
+  cost: '费用',
+  title: '名称',
+  kind: '类型',
+  stats: '攻甲',
+  description: '描述',
+};
+
+export const TEXT_NUDGE_MIN = -80;
+export const TEXT_NUDGE_MAX = 80;
+export const CARD_PREVIEW_SCALE = 2.15;
 
 export const COST_MIN = 0;
 export const COST_MAX = 9;
@@ -73,6 +92,24 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+export function isTextSlot(value: unknown): value is TextSlot {
+  return typeof value === 'string' && (TEXT_SLOTS as readonly string[]).includes(value);
+}
+
+export function createTextLayout(
+  partial?: Partial<Record<TextSlot, Partial<TextNudge>>>,
+): CardTextLayout {
+  const layout = {} as CardTextLayout;
+  for (const slot of TEXT_SLOTS) {
+    const n = partial?.[slot];
+    layout[slot] = {
+      x: readInt(n?.x, 0, TEXT_NUDGE_MIN, TEXT_NUDGE_MAX),
+      y: readInt(n?.y, 0, TEXT_NUDGE_MIN, TEXT_NUDGE_MAX),
+    };
+  }
+  return layout;
+}
+
 function uid(): string {
   return `card_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e4).toString(36)}`;
 }
@@ -101,6 +138,8 @@ export function createDefaultCatalog(): CatalogSave {
     selectedId: card.id,
     panelX: 1480,
     panelY: 48,
+    textLayout: createTextLayout(),
+    textSlot: 'title',
   };
 }
 
@@ -149,6 +188,12 @@ export function loadCatalog(): CatalogSave {
       selectedId,
       panelX: readInt(o.panelX, fallback.panelX, 0, 1920),
       panelY: readInt(o.panelY, fallback.panelY, 0, 1080),
+      textLayout: createTextLayout(
+        o.textLayout && typeof o.textLayout === 'object' && !Array.isArray(o.textLayout)
+          ? (o.textLayout as Partial<Record<TextSlot, Partial<TextNudge>>>)
+          : undefined,
+      ),
+      textSlot: isTextSlot(o.textSlot) ? o.textSlot : 'title',
     };
   } catch {
     return fallback;
@@ -163,6 +208,8 @@ export function saveCatalog(save: CatalogSave): void {
       selectedId: save.selectedId,
       panelX: save.panelX,
       panelY: save.panelY,
+      textLayout: save.textLayout,
+      textSlot: save.textSlot,
     }),
   );
 }

@@ -22,9 +22,25 @@ export class CardApp {
     if (!previewRoot) throw new Error('#card-preview missing');
 
     const save = loadCatalog();
-    const paint = mountCardPreview(previewRoot);
-    const refresh = () => paint(selectedCard(save));
-    mountCardInspector(inspector, save, refresh);
+    let syncLayout = () => {};
+    let markDirty = () => {};
+    const preview = mountCardPreview(previewRoot, {
+      onPick: (slot) => {
+        save.textSlot = slot;
+        syncLayout();
+        preview.paint(selectedCard(save), save.textLayout, save.textSlot);
+      },
+      onNudge: (slot, x, y) => {
+        save.textSlot = slot;
+        save.textLayout[slot] = { x, y };
+        markDirty();
+        syncLayout();
+      },
+    });
+    const refresh = () => preview.paint(selectedCard(save), save.textLayout, save.textSlot);
+    const ui = mountCardInspector(inspector, save, refresh);
+    syncLayout = ui.syncLayout;
+    markDirty = ui.markDirty;
     refresh();
 
     applyDesignStage();

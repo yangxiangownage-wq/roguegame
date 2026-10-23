@@ -5,11 +5,16 @@ import {
   PERSIST_OPTIONS,
   STAT_MAX,
   STAT_MIN,
+  TEXT_NUDGE_MAX,
+  TEXT_NUDGE_MIN,
+  TEXT_SLOT_LABELS,
+  TEXT_SLOTS,
   TITLE_MAX,
   artKey,
   artPresets,
   artUrl,
   createCatalogCard,
+  createTextLayout,
   matchCharArt,
   persistLabel,
   readArtFile,
@@ -18,6 +23,7 @@ import {
   type CatalogCard,
   type CatalogSave,
   type PersistKind,
+  type TextSlot,
 } from '@/config/catalog';
 import {
   DESIGN_HEIGHT,
@@ -42,7 +48,7 @@ export function mountCardInspector(
   root: HTMLElement,
   save: CatalogSave,
   onChange: () => void,
-): void {
+): { markDirty: () => void; syncLayout: () => void } {
   root.replaceChildren();
   root.classList.add('inspector', 'card-inspector', 'is-open');
   placePanel(root, save.panelX, save.panelY);
@@ -128,6 +134,7 @@ export function mountCardInspector(
   artLabel.className = 'inspector-label';
   artLabel.textContent = '立绘';
   const artFileWrap = document.createElement('div');
+  artFileWrap.className = 'art-file-actions';
   const artFile = document.createElement('input');
   artFile.type = 'file';
   artFile.accept = 'image/*';
@@ -137,12 +144,28 @@ export function mountCardInspector(
   artBtn.className = 'art-file-btn';
   artBtn.textContent = '上传图片';
   artBtn.addEventListener('click', () => artFile.click());
-  artFileWrap.append(artBtn, artFile);
+  const folderBtn = document.createElement('button');
+  folderBtn.type = 'button';
+  folderBtn.className = 'art-file-btn';
+  folderBtn.textContent = '打开文件夹';
+  folderBtn.title = '在资源管理器中打开 public/assets/chars';
+  folderBtn.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/__open-chars', { method: 'POST' });
+      folderBtn.textContent = res.ok ? '已打开' : '打开失败';
+    } catch {
+      folderBtn.textContent = '打开失败';
+    }
+    window.setTimeout(() => {
+      folderBtn.textContent = '打开文件夹';
+    }, 900);
+  });
+  artFileWrap.append(artBtn, folderBtn, artFile);
   artRow.append(artLabel, artFileWrap);
   fields.append(artRow);
   const artHint = document.createElement('p');
   artHint.className = 'inspector-hint';
-  artHint.textContent = 'chars 目录里的立绘会自动出现在下面。';
+  artHint.textContent = 'chars 目录里的立绘会自动出现在下面，也可在文件夹里直接替换。';
   fields.append(artHint);
   const presets = document.createElement('div');
   presets.className = 'art-presets';
@@ -159,6 +182,37 @@ export function mountCardInspector(
   });
   fields.append(presets);
   body.append(fields);
+
+  const layoutSection = document.createElement('section');
+  layoutSection.className = 'inspector-section';
+  const layoutTitle = document.createElement('h2');
+  layoutTitle.textContent = '文本位置';
+  layoutSection.append(layoutTitle);
+  const layoutHint = document.createElement('p');
+  layoutHint.className = 'inspector-hint inspector-hint-flush';
+  layoutHint.textContent = '点选下面一项，或直接拖卡面上的字。';
+  layoutSection.append(layoutHint);
+  const slotToggle = document.createElement('div');
+  slotToggle.className = 'layout-slots';
+  const slotBtns = TEXT_SLOTS.map((slot) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = TEXT_SLOT_LABELS[slot];
+    btn.dataset.slot = slot;
+    slotToggle.append(btn);
+    return btn;
+  });
+  layoutSection.append(slotToggle);
+  const nudgeX = rangeRow(layoutSection, 'X', TEXT_NUDGE_MIN, TEXT_NUDGE_MAX);
+  const nudgeY = rangeRow(layoutSection, 'Y', TEXT_NUDGE_MIN, TEXT_NUDGE_MAX);
+  const resetRow = document.createElement('div');
+  resetRow.className = 'inspector-split';
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.textContent = '重置位置';
+  resetRow.append(resetBtn);
+  layoutSection.append(resetRow);
+  body.append(layoutSection);
 
   const actions = document.createElement('div');
   actions.className = 'inspector-actions';
@@ -203,8 +257,18 @@ export function mountCardInspector(
     for (const item of presetBtns) {
       item.btn.classList.toggle('is-active', item.src === artKey(card.art));
     }
+    syncLayout();
     renderList();
     onChange();
+  };
+
+  const syncLayout = () => {
+    const slot = save.textSlot;
+    for (const btn of slotBtns) {
+      btn.classList.toggle('is-active', btn.dataset.slot === slot);
+    }
+    nudgeX.set(save.textLayout[slot].x);
+    nudgeY.set(save.textLayout[slot].y);
   };
 
   const renderList = () => {
@@ -259,6 +323,26 @@ export function mountCardInspector(
       fill();
     });
   }
+  for (const btn of slotBtns) {
+    btn.addEventListener('click', () => {
+      save.textSlot = (btn.dataset.slot as TextSlot) ?? 'title';
+      syncLayout();
+      onChange();
+    });
+  }
+  nudgeX.onInput((n) => {
+    save.textLayout[save.textSlot].x = n;
+    markDirty();
+  });
+  nudgeY.onInput((n) => {
+    save.textLayout[save.textSlot].y = n;
+    markDirty();
+  });
+  resetBtn.addEventListener('click', () => {
+    save.textLayout = createTextLayout();
+    markDirty();
+    syncLayout();
+  });
   artFile.addEventListener('change', async () => {
     const file = artFile.files?.[0];
     artFile.value = '';
@@ -309,7 +393,7 @@ export function mountCardInspector(
 
   exportBtn.addEventListener('click', () => {
     const blob = new Blob(
-      [JSON.stringify({ cards: save.cards }, null, 2)],
+      [JSON.stringify({ cards: save.cards, textLayout: save.textLayout }, null, 2)],
       { type: 'application/json' },
     );
     const a = document.createElement('a');
@@ -324,13 +408,18 @@ export function mountCardInspector(
     importFile.value = '';
     if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text()) as { cards?: unknown };
+      const parsed = JSON.parse(await file.text()) as { cards?: unknown; textLayout?: unknown };
       const cards = Array.isArray(parsed.cards)
         ? parsed.cards.map((raw) => createCatalogCard(raw as Partial<CatalogCard>))
         : [];
       if (!cards.length) return;
       save.cards = cards;
       save.selectedId = cards[0]!.id;
+      if (parsed.textLayout && typeof parsed.textLayout === 'object') {
+        save.textLayout = createTextLayout(
+          parsed.textLayout as Partial<Record<TextSlot, Partial<{ x: number; y: number }>>>,
+        );
+      }
       markDirty();
       fill();
     } catch {
@@ -350,6 +439,7 @@ export function mountCardInspector(
   });
 
   fill();
+  return { markDirty, syncLayout };
 }
 
 function textRow(parent: HTMLElement, label: string, max: number): HTMLInputElement {
