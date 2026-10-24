@@ -21,10 +21,10 @@ type CardNode = {
   layer: number;
 };
 const ART = {
-  hero: '/assets/chars/iron-shield.png?v=1',
-  foe: '/assets/chars/antlers.png?v=1',
-  sword: '/assets/chars/antlers.png?v=1',
-  slave: '/assets/chars/coin-bag.png?v=1',
+  hero: '/assets/chars/emblem-shield.png?v=2',
+  foe: '/assets/chars/emblem-antlers.png?v=2',
+  sword: '/assets/chars/emblem-antlers.png?v=2',
+  slave: '/assets/chars/emblem-bag.png?v=2',
   imp: '/assets/chars/druid.png?v=1',
 };
 const PILE_BUTTON = { width: 100, height: 125, backWidth: 62, backHeight: 89 };

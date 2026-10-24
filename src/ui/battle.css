@@ -275,7 +275,6 @@
   pointer-events: none;
 }
 .hand-card--imp .hand-card__art img { object-fit: contain; object-position: 50% 48%; }
-.hand-card--amber .hand-card__art img { filter: sepia(.45) brightness(.88); transform: none; }
 .hand-card__art::after {
   content: '';
   position: absolute;

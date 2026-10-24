@@ -81,6 +81,10 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    watch: {
+      ignored: ['**/public/assets/_preview/**'],
+      ignorePermissionErrors: true,
+    },
   },
   base: './',
   build: {

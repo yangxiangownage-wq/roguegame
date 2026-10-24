@@ -1,12 +1,12 @@
 /** Shared by the board and the held placement preview. */
 export const PIECE_ART = {
-  mark: '/assets/chars/antlers.png?v=1',
-  gold: '/assets/chars/coin-bag.png?v=1',
-  slave: '/assets/chars/coin-bag.png?v=1',
-  guard: '/assets/chars/iron-shield.png?v=1',
-  energy: '/assets/chars/coin-bag.png?v=1',
+  mark: '/assets/tiles/face-antlers.png?v=2',
+  gold: '/assets/tiles/face-bag.png?v=2',
+  slave: '/assets/tiles/face-bag.png?v=2',
+  guard: '/assets/tiles/face-shield.png?v=2',
+  energy: '/assets/tiles/face-shield.png?v=2',
   threat: '/assets/chars/foe.png',
-  imp: '/assets/chars/druid-token.png?v=1',
+  imp: '/assets/tiles/face-unit.png?v=2',
 } as const;
 export type PieceKind = keyof typeof PIECE_ART;
 export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave' | 'imp';

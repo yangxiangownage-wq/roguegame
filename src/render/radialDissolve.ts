@@ -3,8 +3,8 @@
 export const DISSOLVE_MASK = 56;
 export const DISSOLVE_SEC = 0.4;
 export const DISSOLVE_STAGGER_SEC = 0.1;
-/** In-tile tokens cover the cell; tile roundRect clips overflow. */
-export const ICON_FRAC = 1.36;
+/** Occupied cells are painted tile faces; clip supplies the round. */
+export const ICON_FRAC = 1.04;
 
 const SOFT_FRAC = 0.16;
 const NOISE_FRAC = 0.11;

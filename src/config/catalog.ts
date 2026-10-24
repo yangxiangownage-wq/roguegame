@@ -71,6 +71,9 @@ const CHAR_LABELS: Record<string, string> = {
   antlers: '鹿角',
   'iron-shield': '铁木盾',
   'coin-bag': '钱袋',
+  'emblem-antlers': '鹿角纹章',
+  'emblem-shield': '铁木纹章',
+  'emblem-bag': '钱袋纹章',
   'dwarf-musketeer': '矮人火枪手',
   'dwarf-rifleman': '矮人步枪手',
 };
