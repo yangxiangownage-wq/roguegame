@@ -6,7 +6,7 @@ import {
 } from '@/config/skillCard';
 
 const FRAME_URL = '/assets/cards/frame.png';
-const COST_URL = '/assets/cards/cost.png';
+const COST_URL = '/assets/cards/cost.png?v=5';
 const TAG_URL = '/assets/cards/tag.png';
 
 function loadImage(src: string): Promise<HTMLImageElement> {

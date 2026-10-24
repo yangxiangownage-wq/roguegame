@@ -48,8 +48,8 @@
 }
 
 .card-editor-preview .hand-card__cost {
-  top: calc(-5px + var(--nudge-y, 0px));
-  left: calc(-5px + var(--nudge-x, 0px));
+  top: calc(-7px + var(--nudge-y, 0px));
+  left: calc(-7px + var(--nudge-x, 0px));
 }
 
 .card-editor-preview .hand-card__title {
