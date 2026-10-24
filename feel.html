@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RogueGame · 2D 打击感实验室</title>
+    <link rel="preload" href="/assets/fonts/pixelify-sans.ttf" as="font" type="font/ttf" crossorigin />
+  </head>
+  <body class="feel-page">
+    <header class="feel-top">
+      <div>
+        <p class="feel-kicker">三轮检索 · 分层对照 · 可开关演示</p>
+        <h1>2D 打击感实验室</h1>
+      </div>
+      <p class="feel-lead">
+        打击感不是单张闪光。它是<strong>时间、运动、镜头、特效、声音、数字、伤害档</strong>叠在同一帧接触点上的结果。
+        左边画布按我们现有立绘打击重放；开关图层就能看见缺了哪一层。
+      </p>
+    </header>
+
+    <section class="feel-lab">
+      <div class="feel-stage-wrap">
+        <canvas id="feel-canvas" width="960" height="520" aria-label="立绘打击演示"></canvas>
+        <div class="feel-timeline" id="feel-timeline"></div>
+        <p class="feel-phase" id="feel-phase">待机 · 点播放看接触点</p>
+      </div>
+      <aside class="feel-controls">
+        <div class="feel-presets" role="tablist">
+          <button type="button" class="is-active" data-preset="current">当前实现</button>
+          <button type="button" data-preset="recommended">推荐方案</button>
+          <button type="button" data-preset="custom">自定义</button>
+        </div>
+        <label class="feel-damage">
+          <span>伤害档 <b id="feel-damage-label">4</b></span>
+          <input id="feel-damage" type="range" min="1" max="10" value="4" />
+        </label>
+        <div class="feel-actions">
+          <button type="button" class="feel-play" id="feel-play">播放打击</button>
+          <label><input id="feel-loop" type="checkbox" /> 循环</label>
+        </div>
+        <ul class="feel-toggles" id="feel-toggles"></ul>
+        <p class="feel-hint" id="feel-hint"></p>
+      </aside>
+    </section>
+
+    <section class="feel-grid" id="feel-layers">
+      <article data-layer="time">
+        <h2>时间 · Hitstop</h2>
+        <p>接触瞬间把模拟停 2–10 帧（约 33–160ms），渲染和闪光继续。大脑把停顿读成“力咬进去了”。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>压缩 18ms，接触到释放共 60ms，时间轴不停，没有定格。</dd>
+          <dt>建议</dt>
+          <dd>轻击 2–4 帧，重击 6–10 帧；只冻双方立绘，粒子/闪光/镜头继续。</dd>
+        </dl>
+      </article>
+      <article data-layer="motion">
+        <h2>运动 · 预备 / 挤压 / 击退</h2>
+        <p>Disney：预备、挤压拉伸、跟随。攻击先收再冲，接触时双方压扁，再弹簧回弹。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>有蓄力、冲刺、挤压、残影、弹簧回弹。这是目前最完整的一层。</dd>
+          <dt>建议</dt>
+          <dd>接触挤压拉到 30–50ms；击退幅度随伤害档放大；残影只在冲刺段。</dd>
+        </dl>
+      </article>
+      <article data-layer="camera">
+        <h2>镜头 · Trauma²</h2>
+        <p>Eiserloh：存 trauma∈[0,1]，振幅用 trauma²。小击轻、重击爆。摇的是镜头容器，不是棋盘格子。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>没有相机抖动，也没有方向性 kick。</dd>
+          <dt>建议</dt>
+          <dd>接触加 trauma（1 伤 0.18，10 伤 0.85），衰减 2.4/s，方向沿打击轴。</dd>
+        </dl>
+      </article>
+      <article data-layer="vfx">
+        <h2>特效 · 闪光 / 碎屑 / 冲击波</h2>
+        <p>Juice it or Lose It：粒子、闪光、永久痕迹。闪光必须钉在接触帧，不能晚到回弹。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>白闪从 release（0.30s）才开始，比接触晚 60ms；9 条弹道条，不随伤害变。</dd>
+          <dt>建议</dt>
+          <dd>闪光从 impact 衰减；4 伤起尘土，8 伤冲击波，9 伤震棋盘装饰。</dd>
+        </dl>
+      </article>
+      <article data-layer="audio">
+        <h2>声音 · 低频撞击 + 档位</h2>
+        <p>Nijman：低音比画面更能卖重量。炉石按伤害换 thwack 和观众起哄。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>完全没有命中音效。</dd>
+          <dt>建议</dt>
+          <dd>接触瞬间：低频 thump + 高频 click；6 伤起加观众层。本页用 WebAudio 合成示意。</dd>
+        </dl>
+      </article>
+      <article data-layer="numbers">
+        <h2>数字 · 弹出时机</h2>
+        <p>数字是“确认击中”的阅读锚。它必须和接触同一拍，不能等结算条先走完。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>棋盘结算数字先跳完，再播放立绘打击；打击数字从 impact 升起。</dd>
+          <dt>建议</dt>
+          <dd>结算和打击分轨：格子加分可以提前，立绘 −伤害必须钉在 impact。</dd>
+        </dl>
+      </article>
+      <article data-layer="tier">
+        <h2>伤害档 · 炉石 Smash</h2>
+        <p>1 伤小刺泡，10 伤全屏震动。同一套动作，用档位放大层数，玩家才会感到“这一击更重”。</p>
+        <dl>
+          <dt>我们现在</dt>
+          <dd>1 伤和 10 伤共用同一套闪光、条数、回弹。</dd>
+          <dt>建议</dt>
+          <dd>按 1 / 2–3 / 4–5 / 6–7 / 8–9 / 10 六档加层，见下方阶梯。</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section class="feel-block">
+      <h2>当前代码对照</h2>
+      <table class="feel-table">
+        <thead>
+          <tr><th>层</th><th>现有</th><th>缺口</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>时间轴</td>
+            <td><code>STRIKE = { windup: 0.09, impact: 0.24, compress: 0.018, release: 0.3, end: 0.69 }</code></td>
+            <td>接触只有 60ms 挤压，没有 freeze-frame</td>
+          </tr>
+          <tr>
+            <td>闪光</td>
+            <td><code>flashAge = elapsed - STRIKE.release</code>，<code>exp(-age*38)*0.62</code></td>
+            <td>闪光晚于接触 60ms，峰值已经过了咬合点</td>
+          </tr>
+          <tr>
+            <td>镜头</td>
+            <td>无</td>
+            <td>缺 trauma² 与方向 kick</td>
+          </tr>
+          <tr>
+            <td>特效</td>
+            <td>9 条弹道条 + 锯齿伤害泡</td>
+            <td>不随伤害变；无冲击波 / 尘土档</td>
+          </tr>
+          <tr>
+            <td>声音</td>
+            <td>无</td>
+            <td>缺 thump / click / 观众层</td>
+          </tr>
+          <tr>
+            <td>结算节奏</td>
+            <td>格子加分（步长 60–145ms）全部结束后才 <code>playStrike</code></td>
+            <td>数字高潮和拳头高潮错开</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="feel-block">
+      <h2>炉石式伤害档阶梯</h2>
+      <ol class="feel-ladder" id="feel-ladder">
+        <li data-tier="1"><b>1</b> 小刺泡 + 轻 tick</li>
+        <li data-tier="2"><b>2</b> 加闪光 + 尘土</li>
+        <li data-tier="3"><b>3</b> 碎石粒子，带打击方向</li>
+        <li data-tier="4"><b>4</b> 小镜头抖</li>
+        <li data-tier="5"><b>5</b> 碎石变多</li>
+        <li data-tier="6"><b>6</b> 岩石变大、闪光更亮、声音变沉、观众起哄</li>
+        <li data-tier="7"><b>7</b> 全套再放大一档</li>
+        <li data-tier="8"><b>8</b> 冲击波 + 尘雾</li>
+        <li data-tier="9"><b>9</b> 英雄框 / 棋盘装饰跟着抖</li>
+        <li data-tier="10"><b>10</b> 上限：冲击波弹跳棋子，之后不再加层</li>
+      </ol>
+    </section>
+
+    <section class="feel-block feel-sources">
+      <h2>三轮检索来源</h2>
+      <div class="feel-rounds">
+        <article>
+          <h3>第一轮 · 基础理论</h3>
+          <ul>
+            <li><a href="https://www.youtube.com/watch?v=Fy0aCDmgnxg" target="_blank" rel="noreferrer">Juice it or Lose It</a> — Jonasson &amp; Purho，GDC Europe 2012。粒子、缓动、屏幕震动层层叠加。</li>
+            <li><a href="https://www.youtube.com/watch?v=AJdEqssNZ-U" target="_blank" rel="noreferrer">The Art of Screenshake</a> — Jan Willem Nijman / Vlambeer。清单含 muzzle flash、knockback、sleep（命中定格）。</li>
+            <li><a href="https://www.gdcvault.com/play/1016487/Juice-It-or-Lose" target="_blank" rel="noreferrer">GDC Vault · Juice It or Lose It</a></li>
+            <li><a href="http://grapefrukt.com/f/games/juicy-breakout/" target="_blank" rel="noreferrer">Juicy Breakout</a> 可玩演示 / <a href="https://github.com/grapefrukt/juicy-breakout" target="_blank" rel="noreferrer">源码</a></li>
+            <li>Steve Swink《Game Feel》— 交互的触觉层。</li>
+            <li>Disney 十二原则：预备、挤压拉伸、夸张、跟随。</li>
+          </ul>
+        </article>
+        <article>
+          <h3>第二轮 · 卡牌 / 格斗类比</h3>
+          <ul>
+            <li><a href="https://www.youtube.com/watch?v=1p0mq47asnw" target="_blank" rel="noreferrer">Hearthstone minion smash 分解</a> — 1–10 伤逐档加闪光、碎石、震动、冲击波、观众声。</li>
+            <li><a href="https://www.youtube.com/watch?v=tycbMSjDDLg" target="_blank" rel="noreferrer">樱井政博 · 八种 Hit Stop</a> — Smash Ultimate：定格时模型可抖、碰撞盒可脱离。</li>
+            <li><a href="https://www.youtube.com/watch?v=s4HKw7Hqqd0" target="_blank" rel="noreferrer">What Is Hitstop?</a> — 把停顿当成节奏，而不是卡顿。</li>
+            <li><a href="https://www.reddit.com/r/hearthstone/comments/lb37qo/the_sounds_every_character_on_the_board_makes/" target="_blank" rel="noreferrer">炉石 thwack 按伤害换层</a></li>
+          </ul>
+        </article>
+        <article>
+          <h3>第三轮 · 时值与我们的缺口</h3>
+          <ul>
+            <li>Eiserloh / Squirrel「Juicing Your Cameras」：<code>shake = trauma²</code>，小击轻、重击爆。</li>
+            <li>60fps 起步：轻击定格 2–4 帧，重击 6–10 帧，必杀 12–18 帧。</li>
+            <li>Nijman 演示里 sleep 约 20ms 起；格斗游戏常见 3–9 帧（50–150ms）。</li>
+            <li>我们的压缩 18ms 低于轻击下限；闪光从 0.30s 才起，错过接触。</li>
+            <li><code>SETTLEMENT_IMPACT = 0.065</code> 的格子加分先播完，拳头后至。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <footer class="feel-foot">
+      本页只做对照，不改战斗代码。推荐方案要进正式打击时再说。
+      <a href="/">回战场</a>
+    </footer>
+    <script type="module" src="/src/feel/main.ts"></script>
+  </body>
+</html>

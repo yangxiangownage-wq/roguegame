@@ -93,6 +93,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         card: resolve(__dirname, 'card.html'),
+        feel: resolve(__dirname, 'feel.html'),
       },
     },
   },

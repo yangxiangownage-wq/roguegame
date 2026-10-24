@@ -11,10 +11,11 @@ type StrikeRequest = {
   onImpact: () => void;
   onComplete: () => void;
 };
-type Strike = StrikeRequest & { elapsed: number; impacted: boolean };
+type Strike = StrikeRequest & { elapsed: number; impacted: boolean; trauma: number };
 type FighterPose = { x: number; y: number; angle: number; sx: number; sy: number };
 const STRIKE = { windup: 0.09, impact: 0.24, compress: 0.018, release: 0.3, end: 0.69 };
 const REDUCED_STRIKE = { impact: 0.04, end: 0.34 };
+let hitAudio: AudioContext | null = null;
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -60,6 +61,54 @@ const FIGHTERS: FighterDef[] = [
     inner: '#2a241c',
   },
 ];
+
+function playHitSound(damage: number): void {
+  try {
+    hitAudio ??= new AudioContext();
+    const ctx = hitAudio;
+    if (ctx.state === 'suspended') void ctx.resume();
+    const now = ctx.currentTime;
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(90 + damage * 6, now);
+    thump.frequency.exponentialRampToValueAtTime(42, now + 0.12);
+    thumpGain.gain.setValueAtTime(0.0001, now);
+    thumpGain.gain.exponentialRampToValueAtTime(0.32 + damage * 0.03, now + 0.01);
+    thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    thump.connect(thumpGain).connect(ctx.destination);
+    thump.start(now);
+    thump.stop(now + 0.2);
+
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'triangle';
+    click.frequency.setValueAtTime(420 + damage * 40, now);
+    clickGain.gain.setValueAtTime(0.1, now);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
+    click.connect(clickGain).connect(ctx.destination);
+    click.start(now);
+    click.stop(now + 0.05);
+
+    if (damage >= 6) {
+      const noise = ctx.createBufferSource();
+      const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.22), ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 720;
+      const crowd = ctx.createGain();
+      crowd.gain.setValueAtTime(0.07 + damage * 0.008, now);
+      crowd.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      noise.buffer = buffer;
+      noise.connect(filter).connect(crowd).connect(ctx.destination);
+      noise.start(now);
+    }
+  } catch {
+    // Audio is optional juice; a blocked Autoplay policy should not stall combat.
+  }
+}
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -153,7 +202,11 @@ export class FighterCards {
   }
 
   playStrike(request: StrikeRequest): number {
-    this.strike = { ...request, elapsed: 0, impacted: false };
+    try {
+      hitAudio ??= new AudioContext();
+      void hitAudio.resume();
+    } catch { /* ignore */ }
+    this.strike = { ...request, elapsed: 0, impacted: false, trauma: 0 };
     return request.reducedMotion ? REDUCED_STRIKE.end : STRIKE.end;
   }
 
@@ -168,8 +221,14 @@ export class FighterCards {
     const timing = strike.reducedMotion ? REDUCED_STRIKE : STRIKE;
     if (!strike.impacted && strike.elapsed >= timing.impact) {
       strike.impacted = true;
+      if (!strike.reducedMotion) {
+        playHitSound(strike.damage);
+        // Hearthstone-style smash: shake only from mid damage, never freeze the portraits.
+        if (strike.damage >= 4) strike.trauma = Math.min(1, 0.16 + Math.min(10, strike.damage) * 0.04);
+      }
       strike.onImpact();
     }
+    strike.trauma = Math.max(0, strike.trauma - 2.8 * dt);
     if (this.strike === strike && strike.elapsed >= timing.end) {
       this.strike = null;
       strike.onComplete();
@@ -277,16 +336,26 @@ export class FighterCards {
     const timing = strike.reducedMotion ? REDUCED_STRIKE : STRIKE;
     const age = strike.elapsed - timing.impact;
     const hit = strike.impacted;
+    const direction = foe.x >= hero.x ? 1 : -1;
+    const shake = strike.trauma * strike.trauma;
+    const now = performance.now() * 0.001;
+    g.save();
+    if (!strike.reducedMotion && shake > 0.002) {
+      g.translate(
+        direction * shake * 6 * Math.sin(now * 58),
+        shake * (5 * Math.sin(now * 67) + 3 * Math.cos(now * 53)),
+      );
+    }
     const defender = strike.reducedMotion ? foe : this.defenderPose(strike.elapsed, foe, hero);
-    const flashAge = strike.reducedMotion ? age : Math.max(0, strike.elapsed - STRIKE.release);
-    this.paintFighter(g, 1, defender, 1, hit ? Math.exp(-flashAge * 38) * 0.62 : 0);
+    this.paintFighter(g, 1, defender, 1, hit ? Math.exp(-Math.max(0, age) * 38) * 0.62 : 0);
     if (!strike.reducedMotion && strike.elapsed > STRIKE.windup + 0.05 && strike.elapsed < STRIKE.impact) {
       // Two brief afterimages communicate speed without moving the board or HUD.
       this.paintFighter(g, 0, this.attackPose(strike.elapsed - 0.036, hero, foe), 0.06);
       this.paintFighter(g, 0, this.attackPose(strike.elapsed - 0.018, hero, foe), 0.12);
     }
     this.paintFighter(g, 0, strike.reducedMotion ? hero : this.attackPose(strike.elapsed, hero, foe));
-    if (hit) this.drawImpact(g, defender, strike, age, foe.x >= hero.x ? 1 : -1);
+    if (hit) this.drawImpact(g, defender, strike, age, direction);
+    g.restore();
   }
 
   private drawImpact(g: CanvasRenderingContext2D, target: FighterPose, strike: Strike, age: number, direction: number): void {
