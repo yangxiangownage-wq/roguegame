@@ -447,26 +447,24 @@
 .battle-score__body {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 2px;
   opacity: 0;
-  transform-origin: 50% 80%;
+  transform-origin: 50% 90%;
   will-change: transform, opacity;
 }
-.battle-score__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  color: #ffe6a0;
-  text-shadow: 2px 2px 0 #17100b, -1px -1px 0 #17100b, 1px -1px 0 #17100b, -1px 1px 0 #17100b;
-}
-.battle-score strong {
-  font: 700 36px/.9 "Settlement Digits", monospace;
+.battle-score__total {
+  color: var(--score-color, #fff4c8);
+  font: 700 var(--score-size, 32px)/.85 "Settlement Digits", monospace;
   font-variant-numeric: tabular-nums;
-  -webkit-text-stroke: 0;
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--score-color, #fff4c8) 45%, transparent),
+    2px 2px 0 #17100b, -1px -1px 0 #17100b, 1px -1px 0 #17100b, -1px 1px 0 #17100b;
 }
-.battle-score__unit { margin-left: 2px; font: 800 13px/1 "PingFang SC", sans-serif; }
-.battle-score__kind { margin-left: 7px; font: 700 12px/1 "PingFang SC", sans-serif; color: #fff2d8; }
-.battle-score--attack { color: #ffac89; }
+.battle-score__extra {
+  font: 700 13px/1 "Settlement Digits", sans-serif;
+  text-shadow: 1px 1px 0 #17100b;
+}
 .battle-score--armor { color: #9edbff; }
 .battle-score--energy { color: #b5e68e; }
 .battle-score--mine { color: #ffdc80; }

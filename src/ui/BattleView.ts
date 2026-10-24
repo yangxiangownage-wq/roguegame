@@ -43,6 +43,13 @@ const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+const mixHex = (from: string, to: string, t: number) => {
+  const u = Math.max(0, Math.min(1, t));
+  const n = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const a = n(from);
+  const b = n(to);
+  return `#${[0, 1, 2].map(i => Math.round(mix(a[i]!, b[i]!, u)).toString(16).padStart(2, '0')).join('')}`;
+};
 const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 const springResponse = (time: number) => {
   const omega = Math.sqrt(CARD_SPRING_STIFFNESS);
@@ -618,10 +625,12 @@ export class BattleView {
       this.settlementCues.push({ at: 0.18, run: () => this.finishBoardSettlement(settlement) });
       return 0.18;
     }
+    this.clearSettlementScores();
     const mined = new Set(settlement.minedIds);
     const sources = this.battle.units
       .filter(unit => unit.owner === 'player' && settlement.unitIds.includes(unit.id))
-      .sort((a, b) => a.row - b.row || a.col - b.col)
+      // Left-to-right columns first; within a column, top to bottom.
+      .sort((a, b) => a.col - b.col || a.row - b.row)
       .map(unit => {
         const parts: ScorePart[] = [];
         if (unit.attack) parts.push({ kind: 'attack', value: unit.attack });
@@ -639,13 +648,16 @@ export class BattleView {
     const heading = this.settlement.querySelector<HTMLElement>('.battle-settlement__heading');
     if (heading) heading.textContent = `棋盘结算 · 0 / ${sources.length}`;
     // Keep individual cells readable, compressing the cadence on a crowded board.
-    const step = Math.max(0.06, Math.min(0.145, 1 / Math.max(1, sources.length - 1)));
+    const step = Math.max(0.18, Math.min(0.28, 1.6 / Math.max(1, sources.length - 1)));
     const lead = 0.09;
+    let runningAttack = 0;
     sources.forEach(({ unit, parts }, index) => {
       const at = lead + index * step;
+      runningAttack += parts.reduce((sum, part) => part.kind === 'attack' ? sum + part.value : sum, 0);
+      const total = runningAttack;
       this.settlementCues.push({ at, run: () => {
         this.board.pulseSettlement([unit.id]);
-        this.popSettlementScore(parts, unit.col, unit.row, unit.id);
+        this.popSettlementScore(parts, unit.col, unit.row, total);
       }});
       this.settlementCues.push({ at: at + SETTLEMENT_IMPACT, run: () => {
         const running = this.settlementDisplay;
@@ -672,6 +684,7 @@ export class BattleView {
 
   private finishBoardSettlement(settlement: BoardSettlement): void {
     this.settlement.classList.remove('is-scoring');
+    this.fadeSettlementScores();
     const heading = this.settlement.querySelector<HTMLElement>('.battle-settlement__heading');
     if (heading) heading.textContent = '本回合合计';
     const complete = () => {
@@ -723,28 +736,52 @@ export class BattleView {
     }
   }
 
-  private popSettlementScore(parts: ScorePart[], col: number, row: number, unitId: number): void {
+  private clearSettlementScores(): void {
+    for (const el of this.root.querySelectorAll('.battle-score')) el.remove();
+  }
+
+  private fadeSettlementScores(): void {
+    for (const el of this.root.querySelectorAll<HTMLElement>('.battle-score')) {
+      const body = el.firstElementChild;
+      if (!(body instanceof HTMLElement) || this.reduced.matches) {
+        el.remove();
+        continue;
+      }
+      body.getAnimations().forEach(animation => animation.cancel());
+      body.animate(
+        [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.92)' }],
+        { duration: 180, easing: 'ease-out', fill: 'forwards' },
+      ).finished.then(() => el.remove()).catch(() => el.remove());
+    }
+  }
+
+  private popSettlementScore(parts: ScorePart[], col: number, row: number, runningAttack: number): void {
     const center = boardCellCenter(this.settings, col, row);
     const scale = battleLayout(this.settings).scale * Math.min(1.1, this.settings.tileSize / 126);
-    const labels = { attack: '伤害', armor: '护甲', energy: '储能', mine: '上限' };
+    const attack = parts.reduce((sum, part) => part.kind === 'attack' ? sum + part.value : sum, 0);
+    const extras = parts.filter(part => part.kind !== 'attack');
+    const heat = attack > 0 ? Math.min(1, Math.max(0, (runningAttack - 1) / 9)) : 0;
     const score = document.createElement('div');
     score.className = 'battle-score';
-    score.dataset.unitId = String(unitId);
     score.style.left = `${center.x}px`;
-    score.style.top = `${center.y - 10 * scale}px`;
+    score.style.top = `${center.y - 8 * scale}px`;
     score.style.setProperty('--score-scale', String(scale));
-    // A unit with two effects gets two aligned rows in ONE popup, never overlapping popups.
-    score.innerHTML = `<div class="battle-score__body">${parts.map(part => `<div class="battle-score__row battle-score--${part.kind}"><strong>+${part.value}</strong><span class="battle-score__unit">分</span><span class="battle-score__kind">${labels[part.kind]}</span></div>`).join('')}</div>`;
+    score.style.setProperty('--score-size', `${Math.round(30 + heat * 34)}px`);
+    score.style.setProperty('--score-color', mixHex('#fff4c8', '#ff2d18', heat));
+    const extraHtml = extras.map(part => `<span class="battle-score__extra battle-score--${part.kind}">+${part.value}</span>`).join('');
+    const totalHtml = attack > 0 ? `<strong class="battle-score__total">+${runningAttack}</strong>` : '';
+    score.innerHTML = `<div class="battle-score__body">${totalHtml}${extraHtml}</div>`;
     this.root.append(score);
     const body = score.firstElementChild!;
-    const animation = body.animate([
-      { opacity: 0, transform: 'translateY(8px) scale(.82, .72)', offset: 0, easing: 'cubic-bezier(.12,.8,.24,1)' },
-      { opacity: 1, transform: 'translateY(-8px) scale(1.12, 1.16)', offset: 0.14, easing: 'cubic-bezier(.2,.75,.3,1)' },
-      { opacity: 1, transform: 'translateY(-6px) scale(1)', offset: 0.3 },
-      { opacity: 1, transform: 'translateY(-10px) scale(1)', offset: 0.72, easing: 'cubic-bezier(.4,0,.8,.5)' },
-      { opacity: 0, transform: 'translateY(-32px) scale(.98)', offset: 1 },
-    ], { duration: SETTLEMENT_SCORE_DURATION, fill: 'both' });
-    animation.finished.then(() => score.remove()).catch(() => score.remove());
+    if (this.reduced.matches) {
+      (body as HTMLElement).style.opacity = '1';
+      return;
+    }
+    body.animate([
+      { opacity: 0, transform: 'translateY(6px) scale(.72)', offset: 0, easing: 'cubic-bezier(.12,.8,.24,1)' },
+      { opacity: 1, transform: 'translateY(-4px) scale(1.16)', offset: 0.22, easing: 'cubic-bezier(.2,.75,.3,1)' },
+      { opacity: 1, transform: 'translateY(0) scale(1)', offset: 1 },
+    ], { duration: 280, fill: 'forwards' });
   }
 
   private incrementSettlementScore(counter: HTMLElement, amount: number): void {
