@@ -190,8 +190,17 @@ html, body {
   border-color: #4a90d9;
 }
 
+.inspector-hint {
+  margin: 8px 14px 4px;
+  color: #9a9a9a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .inspector-actions {
   padding: 10px 14px 4px;
+  display: grid;
+  gap: 8px;
 }
 
 .inspector-actions button {

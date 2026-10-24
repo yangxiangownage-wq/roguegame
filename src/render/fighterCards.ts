@@ -1,5 +1,12 @@
 import type { Battle } from '@/game/battle';
 import { boardMetrics, type BoardSettings } from '@/config/board';
+import {
+  DEFAULT_HIT_FEEL,
+  shakeAmplitude,
+  shakeDecay,
+  shakeDone,
+  type HitFeel,
+} from '@/config/hitFeel';
 
 export const CARD_W = 268;
 export const CARD_H = 500;
@@ -11,7 +18,7 @@ type StrikeRequest = {
   onImpact: () => void;
   onComplete: () => void;
 };
-type Strike = StrikeRequest & { elapsed: number; impacted: boolean; trauma: number };
+type Strike = StrikeRequest & { elapsed: number; impacted: boolean };
 type FighterPose = { x: number; y: number; angle: number; sx: number; sy: number };
 const STRIKE = { windup: 0.09, impact: 0.24, compress: 0.018, release: 0.3, end: 0.69 };
 const REDUCED_STRIKE = { impact: 0.04, end: 0.34 };
@@ -147,6 +154,10 @@ export class FighterCards {
   private readonly fighters = FIGHTERS.map(f => ({ ...f }));
   private battleRevision = -1;
   private strike: Strike | null = null;
+  private shakeAge = 0;
+  private shakeAmp = 0;
+  private shakeDir = 1;
+  private feel: HitFeel = { ...DEFAULT_HIT_FEEL };
   private settlementPreview: { attack: number; armor: number; foeHp?: number } | null = null;
   private constructor(
     private readonly portraits: HTMLImageElement[],
@@ -201,20 +212,65 @@ export class FighterCards {
     }
   }
 
+  setHitFeel(feel: HitFeel): void {
+    this.feel = feel;
+  }
+
   playStrike(request: StrikeRequest): number {
     try {
       hitAudio ??= new AudioContext();
       void hitAudio.resume();
     } catch { /* ignore */ }
-    this.strike = { ...request, elapsed: 0, impacted: false, trauma: 0 };
+    this.strike = { ...request, elapsed: 0, impacted: false };
     return request.reducedMotion ? REDUCED_STRIKE.end : STRIKE.end;
+  }
+
+  previewShake(damage: number): void {
+    try {
+      hitAudio ??= new AudioContext();
+      void hitAudio.resume();
+    } catch { /* ignore */ }
+    playHitSound(damage);
+    this.shakeAge = 0;
+    this.shakeAmp = shakeAmplitude(this.feel, damage);
+  }
+
+  previewStrike(damage: number): void {
+    if (this.strike) {
+      this.previewShake(damage);
+      return;
+    }
+    this.playStrike({
+      damage,
+      reducedMotion: false,
+      onImpact: () => {},
+      onComplete: () => {},
+    });
   }
 
   cancelStrike(): void {
     this.strike = null;
   }
 
+  cameraShake(): { x: number; y: number } {
+    if (this.shakeAmp < 0.2) return { x: 0, y: 0 };
+    const decay = shakeDecay(this.feel.duration);
+    const envelope = Math.exp(-decay * this.shakeAge);
+    if (envelope < 0.02) return { x: 0, y: 0 };
+    const omega = Math.PI * 2 * this.feel.frequency;
+    const wave = Math.sin(omega * this.shakeAge);
+    const lift = Math.sin(omega * this.shakeAge + 0.9);
+    return {
+      x: this.shakeDir * this.shakeAmp * envelope * wave,
+      y: this.shakeAmp * 0.42 * envelope * lift,
+    };
+  }
+
   update(dt: number): void {
+    if (this.shakeAmp > 0) {
+      this.shakeAge += dt;
+      if (shakeDone(this.shakeAge, this.feel.duration)) this.shakeAmp = 0;
+    }
     const strike = this.strike;
     if (!strike) return;
     strike.elapsed += dt;
@@ -223,12 +279,12 @@ export class FighterCards {
       strike.impacted = true;
       if (!strike.reducedMotion) {
         playHitSound(strike.damage);
-        // Hearthstone-style smash: shake only from mid damage, never freeze the portraits.
-        if (strike.damage >= 4) strike.trauma = Math.min(1, 0.16 + Math.min(10, strike.damage) * 0.04);
+        this.shakeAge = 0;
+        this.shakeAmp = shakeAmplitude(this.feel, strike.damage);
+        this.shakeDir = 1;
       }
       strike.onImpact();
     }
-    strike.trauma = Math.max(0, strike.trauma - 2.8 * dt);
     if (this.strike === strike && strike.elapsed >= timing.end) {
       this.strike = null;
       strike.onComplete();
@@ -337,15 +393,7 @@ export class FighterCards {
     const age = strike.elapsed - timing.impact;
     const hit = strike.impacted;
     const direction = foe.x >= hero.x ? 1 : -1;
-    const shake = strike.trauma * strike.trauma;
-    const now = performance.now() * 0.001;
-    g.save();
-    if (!strike.reducedMotion && shake > 0.002) {
-      g.translate(
-        direction * shake * 6 * Math.sin(now * 58),
-        shake * (5 * Math.sin(now * 67) + 3 * Math.cos(now * 53)),
-      );
-    }
+    if (hit) this.shakeDir = direction;
     const defender = strike.reducedMotion ? foe : this.defenderPose(strike.elapsed, foe, hero);
     this.paintFighter(g, 1, defender, 1, hit ? Math.exp(-Math.max(0, age) * 38) * 0.62 : 0);
     if (!strike.reducedMotion && strike.elapsed > STRIKE.windup + 0.05 && strike.elapsed < STRIKE.impact) {
@@ -355,7 +403,6 @@ export class FighterCards {
     }
     this.paintFighter(g, 0, strike.reducedMotion ? hero : this.attackPose(strike.elapsed, hero, foe));
     if (hit) this.drawImpact(g, defender, strike, age, direction);
-    g.restore();
   }
 
   private drawImpact(g: CanvasRenderingContext2D, target: FighterPose, strike: Strike, age: number, direction: number): void {

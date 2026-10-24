@@ -12,6 +12,8 @@ import { BattleView } from '@/ui/BattleView';
 import { battleLayout } from '@/config/battleLayout';
 import { mountBoardInspector } from '@/ui/BoardInspector';
 import { mountHudInspector } from '@/ui/HudInspector';
+import { mountFeelInspector } from '@/ui/FeelInspector';
+import { loadHitFeelSave } from '@/config/hitFeel';
 
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
@@ -41,6 +43,11 @@ export class GameApp {
     const hud = document.querySelector<HTMLElement>('#hud-inspector');
     if (!hud) throw new Error('#hud-inspector missing');
     mountHudInspector(hud, this.settings, { ...save, hudHidden: true });
+    const feelPanel = document.querySelector<HTMLElement>('#feel-inspector');
+    if (!feelPanel) throw new Error('#feel-inspector missing');
+    const hitFeel = loadHitFeelSave();
+    this.fighters.setHitFeel(hitFeel);
+    mountFeelInspector(feelPanel, hitFeel, hitFeel, this.fighters);
     this.battleView = new BattleView(this.settings, this.board, this.fighters);
     this.fit = applyDesignStage();
     this.bindResize();
@@ -129,6 +136,8 @@ export class GameApp {
     this.ctx.translate(960, layout.centerY);
     this.ctx.scale(layout.scale, layout.scale);
     this.ctx.translate(-960, -540);
+    const shake = this.fighters.cameraShake();
+    this.ctx.translate(shake.x, shake.y);
     this.board.draw(this.ctx, this.settings);
     this.fighters.draw(this.ctx, this.settings);
     this.ctx.restore();
