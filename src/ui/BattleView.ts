@@ -37,7 +37,6 @@ const DISCARD_STAGGER = 0.035;
 const DEAL_FLIGHT = 0.34;
 const DEAL_LAND = 0.1;
 const DEAL_STAGGER = 0.04;
-const SETTLEMENT_SCORE_DURATION = 460;
 const SETTLEMENT_IMPACT = 0.065;
 const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
@@ -647,12 +646,15 @@ export class BattleView {
     // One clock controls the source pulse, score impact and turn transition.
     const heading = this.settlement.querySelector<HTMLElement>('.battle-settlement__heading');
     if (heading) heading.textContent = `棋盘结算 · 0 / ${sources.length}`;
-    // Keep individual cells readable, compressing the cadence on a crowded board.
-    const step = Math.max(0.18, Math.min(0.28, 1.6 / Math.max(1, sources.length - 1)));
+    // Balatro-style: first pops stay readable, then the gaps ease in toward a rush.
     const lead = 0.09;
+    const last = Math.max(1, sources.length - 1);
+    let clock = lead;
+    let lastAt = lead;
     let runningAttack = 0;
     sources.forEach(({ unit, parts }, index) => {
-      const at = lead + index * step;
+      const at = clock;
+      lastAt = at;
       runningAttack += parts.reduce((sum, part) => part.kind === 'attack' ? sum + part.value : sum, 0);
       const total = runningAttack;
       this.settlementCues.push({ at, run: () => {
@@ -675,8 +677,10 @@ export class BattleView {
         this.syncEnergyHud();
         if (heading) heading.textContent = `棋盘结算 · ${index + 1} / ${sources.length}`;
       }});
+      const rush = (index / last) * (index / last);
+      clock += mix(0.3, 0.08, rush);
     });
-    const duration = lead + (sources.length - 1) * step + SETTLEMENT_SCORE_DURATION / 1000;
+    const duration = lastAt + mix(0.42, 0.24, ((sources.length - 1) / last) ** 2);
     this.settlementCues.push({ at: duration, run: () => this.finishBoardSettlement(settlement) });
     this.settlementCues.sort((a, b) => a.at - b.at);
     return duration;
