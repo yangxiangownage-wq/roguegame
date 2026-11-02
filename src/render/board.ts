@@ -260,6 +260,10 @@ export class StoneBoard {
     }
   }
 
+  pulseVents(cells: Array<{ col: number; row: number }>): void {
+    for (const cell of cells) this.fxOf(cell).settleT = 0.42;
+  }
+
   place(col: number, row: number, delay = 0, kind: 'mark' | 'slave' = 'mark'): void {
     this.setPiece(col, row, kind, delay);
   }
@@ -530,6 +534,16 @@ export class StoneBoard {
     return fx;
   }
 
+  private isVentNeighbor(cell: Cell): boolean {
+    const here = this.fx.get(cellKey(cell.col, cell.row));
+    if (here?.iconOn) return false;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const next = this.fx.get(cellKey(cell.col + dc, cell.row + dr));
+      if (next?.iconOn && next.owner === 'enemy') return true;
+    }
+    return false;
+  }
+
   private isHot(cell: Cell): boolean {
     const fx = this.fx.get(cellKey(cell.col, cell.row));
     if (!fx) return false;
@@ -581,6 +595,11 @@ export class StoneBoard {
     }
     if (fx?.iconOn && fx.owner === 'enemy') {
       g.fillStyle = 'rgba(122, 35, 31, .17)';
+      g.fillRect(0, 0, size, size);
+    }
+    if (this.isVentNeighbor(cell)) {
+      const glow = 0.14 + 0.08 * Math.sin(this.hintTime * 4);
+      g.fillStyle = `rgba(156, 82, 214, ${glow})`;
       g.fillRect(0, 0, size, size);
     }
     if (fx?.settleT) {

@@ -9,10 +9,9 @@ export type TalkLine = {
 export const TALK_SCRIPT: TalkLine[] = [
   { side: 'right', name: '老者', text: '先别动手。坐下，听我把这一桌的规矩说完。' },
   { side: 'left', name: '你', text: '……我该怎么打？' },
-  { side: 'right', name: '老者', text: '把牌放到格子上。牌会留在那里，每回合替你出力。' },
-  { side: 'right', name: '老者', text: '鹿角加攻击，盾加护甲。能量用完，就结束回合。' },
-  { side: 'left', name: '你', text: '结束之后呢？' },
-  { side: 'right', name: '老者', text: '棋盘结算完，你从左边打出去，打的是我这边。挡住来袭，打空生命，这一桌就算你赢。' },
+  { side: 'right', name: '老者', text: '放到格子上的牌会留下，那就是随从。鹿角打人，盾挡伤害。' },
+  { side: 'right', name: '老者', text: '我也会在自己的回合放下随从。空着的邻格，会替它喷出法术。' },
+  { side: 'right', name: '老者', text: '用你的随从堵住那些空格，法术就会变少。法术打完就没了，随从一直占着。' },
   { side: 'left', name: '你', text: '明白了。' },
   { side: 'right', name: '老者', text: '好。伸手吧。' },
 ];

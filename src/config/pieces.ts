@@ -7,9 +7,10 @@ export const PIECE_ART = {
   energy: '/assets/tiles/face-shield.png?v=2',
   threat: '/assets/chars/foe.png',
   imp: '/assets/tiles/face-unit.png?v=2',
+  tutor: '/assets/tiles/face-unit.png?v=2',
 } as const;
 export type PieceKind = keyof typeof PIECE_ART;
-export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave' | 'imp' | 'ember' | 'hymn' | 'lamp';
+export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave' | 'imp' | 'ember' | 'hymn' | 'lamp' | 'tutor';
 export const STANDING_PIECES: ReadonlySet<PieceKind> = new Set();
 export type BoardUnit = {
   id: number;

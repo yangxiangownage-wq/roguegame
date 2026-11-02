@@ -1,4 +1,4 @@
-import { Battle, CARD_DEFS, STARTING_DECK, isSpellCard, type BattleCard, type BoardSettlement } from '@/game/battle';
+import { Battle, CARD_DEFS, STARTING_DECK, isSpellCard, type BattleCard, type BoardSettlement, type EnemyAction } from '@/game/battle';
 import type { CardKey } from '@/config/pieces';
 import type { StoneBoard } from '@/render/board';
 import type { FighterCards } from '@/render/fighterCards';
@@ -38,6 +38,7 @@ const ART = {
   sword: '/assets/chars/emblem-antlers.png?v=2',
   slave: '/assets/chars/emblem-bag.png?v=2',
   imp: '/assets/chars/druid.png?v=1',
+  tutor: '/assets/chars/elder.png',
 };
 const PILE_BUTTON = { width: 100, height: 125, backWidth: 62, backHeight: 89 };
 const DRAW_PILE = { left: 280, top: 940, scale: 0.8 };
@@ -118,7 +119,8 @@ export class BattleView {
   private settlementHold = 0;
   private turnPause = 0;
   private revealBeforeDiscard = 0;
-  private turnCue: 'none' | 'enemy-strike' | 'player-deal' = 'none';
+  private turnCue: 'none' | 'enemy-play' | 'enemy-strike' | 'player-deal' = 'none';
+  private elderFlight = false;
   private talking = false;
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -395,8 +397,11 @@ export class BattleView {
     this.discardPile.setAttribute('aria-label', `查看弃牌堆，${b.discardPile.length} 张`);
     this.end.disabled = b.phase !== 'player' || this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
     this.syncTurnHud();
-    const boardThreat = b.units.filter(unit => unit.owner === 'enemy').reduce((total, unit) => total + (unit.attack ?? 0), 0);
-    this.intent.innerHTML = `<span>来袭伤害</span><strong>${b.intent + boardThreat}</strong>${boardThreat ? `<small>本体 ${b.intent} · 棋盘 +${boardThreat}</small>` : '<small>敌方意图</small>'}`;
+    const incoming = b.enemyIncoming();
+    const detail = incoming.minion
+      ? (incoming.spell ? `邻格法术 ${incoming.vents} · 余烬 ${incoming.spell}` : `空邻格法术 ${incoming.vents}`)
+      : '回合结束后放下随从';
+    this.intent.innerHTML = `<span>来袭伤害</span><strong>${incoming.total}</strong><small>${detail}</small>`;
     this.intent.hidden = b.phase === 'won' || b.phase === 'lost';
     this.syncGuardHud();
     if ((b.phase === 'won' || b.phase === 'lost') && !this.settlementCues.length && !this.combatAnimating && this.shop.hidden && this.result.hidden) this.resultTimer = 0.65;
@@ -787,7 +792,7 @@ export class BattleView {
         this.resultTimer = 0.26;
         this.live.textContent = `造成 ${settlement.damage} 点伤害，击败老者`;
       } else {
-        this.turnCue = 'enemy-strike';
+        this.turnCue = 'enemy-play';
         this.turnPause = Math.max(this.turnPause, 0.16);
       }
     };
@@ -884,8 +889,72 @@ export class BattleView {
     ], { duration: 145, easing: 'cubic-bezier(.16,.85,.25,1)' });
   }
 
+  private playElderAction(action: EnemyAction): void {
+    if (action.type === 'minion') {
+      this.message('老者放下学徒：空着的邻格会喷出法术');
+      this.flyElderMinion(action.unit);
+      return;
+    }
+    if (action.type === 'spell') {
+      this.message(`老者打出${action.title}：立刻造成 ${action.damage} 点伤害`);
+      this.turnCue = 'enemy-strike';
+      this.turnPause = this.reduced.matches ? 0.08 : 0.7;
+      this.sync();
+      return;
+    }
+    this.turnCue = 'enemy-strike';
+    this.turnPause = this.reduced.matches ? 0.05 : 0.18;
+    this.sync();
+  }
+
+  private flyElderMinion(unit: { col: number; row: number }): void {
+    if (this.reduced.matches) {
+      this.board.syncUnits(this.battle.units, 0);
+      this.turnCue = 'enemy-strike';
+      this.turnPause = 0.08;
+      this.sync();
+      return;
+    }
+    const def = CARD_DEFS.tutor;
+    const element = document.createElement('div');
+    element.className = `hand-card hand-card--${def.tone} hand-card--tutor is-elder-play`;
+    element.innerHTML = `<span class="hand-card__art"><img src="${ART.tutor}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>`;
+    element.style.pointerEvents = 'none';
+    element.style.zIndex = '55';
+    this.root.append(element);
+    const layout = battleLayout(this.settings);
+    const from = { x: layout.foeX, y: (layout.foeTop + layout.foeBottom) / 2 };
+    const to = boardCellCenter(this.settings, unit.col, unit.row);
+    element.style.transform = `translate3d(${from.x - 100}px, ${from.y - 150}px, 0) scale(0.56)`;
+    this.elderFlight = true;
+    const anim = element.animate(
+      [
+        { transform: `translate3d(${from.x - 100}px, ${from.y - 150}px, 0) rotate(-8deg) scale(0.56)`, offset: 0 },
+        { transform: `translate3d(${(from.x + to.x) / 2 - 100}px, ${(from.y + to.y) / 2 - 210}px, 0) rotate(4deg) scale(0.5)`, offset: 0.45 },
+        { transform: `translate3d(${to.x - 100}px, ${to.y - 150}px, 0) rotate(0deg) scale(0.34)`, offset: 1 },
+      ],
+      { duration: 520, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' },
+    );
+    anim.onfinish = () => {
+      element.remove();
+      this.elderFlight = false;
+      this.board.syncUnits(this.battle.units, 0.08);
+      this.turnCue = 'enemy-strike';
+      this.turnPause = 0.28;
+      this.sync();
+    };
+  }
+
   private advanceTurnCue(): void {
+    if (this.turnCue === 'enemy-play') {
+      if (this.elderFlight) return;
+      const action = this.battle.prepareEnemyTurn();
+      this.playElderAction(action);
+      return;
+    }
     if (this.turnCue === 'enemy-strike') {
+      const vents = this.battle.ventCells();
+      if (vents.length) this.board.pulseVents(vents);
       const hit = this.battle.strikeEnemy();
       this.turnCue = 'none';
       if (!hit) return;
@@ -893,7 +962,9 @@ export class BattleView {
       const layout = battleLayout(this.settings);
       if (hit.damage > 0) {
         this.float(`-${hit.damage}`, layout.heroX, layout.heroBottom - 72);
-        this.message(`老者造成 ${hit.damage} 点伤害`);
+        this.message(hit.boardDamage
+          ? `学徒邻格喷出 ${hit.boardDamage} 点法术`
+          : `老者造成 ${hit.damage} 点伤害`);
       } else {
         this.float(`格挡 ${hit.blocked}`, layout.heroX, layout.heroBottom - 72, 'block');
         this.message('护甲挡住了全部伤害');
@@ -964,6 +1035,8 @@ export class BattleView {
     this.revealBeforeDiscard = 0;
     this.turnPause = 0;
     this.turnCue = 'none';
+    this.elderFlight = false;
+    for (const card of this.root.querySelectorAll('.is-elder-play')) card.remove();
     this.board.syncUnits([]);
   }
 
@@ -1153,7 +1226,7 @@ export class BattleView {
       }
     }
     this.turnPause = Math.max(0, this.turnPause - dt);
-    if (this.turnPause === 0 && this.turnCue !== 'none' && !this.settlementCues.length && !this.combatAnimating) this.advanceTurnCue();
+    if (this.turnPause === 0 && this.turnCue !== 'none' && !this.settlementCues.length && !this.combatAnimating && !this.elderFlight) this.advanceTurnCue();
     this.layoutHud();
     const layout = battleLayout(this.settings);
     this.intent.style.left = `${layout.foeX}px`;

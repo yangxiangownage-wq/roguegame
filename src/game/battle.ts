@@ -7,7 +7,7 @@ export type CardDefinition = {
   energy?: number; nextEnergy?: number; comboDraw?: boolean;
   keywords?: KeywordId[];
   boardKind?: Exclude<PieceKind, 'gold'>; boardDamage?: number; boardArmor?: number; boardEnergy?: number; mines?: boolean;
-  art: 'hero' | 'foe' | 'sword' | 'slave' | 'imp'; tone: string;
+  art: 'hero' | 'foe' | 'sword' | 'slave' | 'imp' | 'tutor'; tone: string;
 };
 const STAY: KeywordId[] = ['permanent'];
 const SPELL: KeywordId[] = ['spell'];
@@ -22,7 +22,12 @@ export const CARD_DEFS: Record<CardKey, CardDefinition> = {
   ember: { title: '余烬', cost: 1, kind: '法术', description: ['立刻造成 8 点伤害。'], damage: 8, keywords: SPELL, art: 'sword', tone: 'crimson' },
   hymn: { title: '祷言', cost: 1, kind: '法术', description: ['立刻获得 8 点护甲。'], block: 8, keywords: SPELL, art: 'hero', tone: 'teal' },
   lamp: { title: '油灯', cost: 0, kind: '法术', description: ['立刻为下回合储备 1 点能量。'], nextEnergy: 1, keywords: SPELL, art: 'slave', tone: 'amber' },
+  tutor: { title: '学徒', cost: 1, kind: '攻击', description: ['占住一格。', '每回合每个空邻格施放 1 点法术。'], keywords: STAY, boardKind: 'tutor', art: 'tutor', tone: 'amber' },
 };
+export type EnemyAction =
+  | { type: 'minion'; unit: BoardUnit }
+  | { type: 'spell'; title: string; damage: number }
+  | { type: 'idle' };
 export const isSpellCard = (key: CardKey): boolean => CARD_DEFS[key].kind === '法术';
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
@@ -57,9 +62,11 @@ export class Battle {
   private rows = 5;
   private mines: Array<{ col: number; row: number }> = [];
   private nextUnitId = 1000;
+  private elderSpellCast = false;
+  private pendingEnemySpell = 0;
   constructor(private readonly random: () => number = Math.random) { this.reset(); }
 
-  get intent(): number { return [6, 8, 10][(this.turn - 1) % 3]!; }
+  get intent(): number { return 0; }
   reset(deck: readonly CardKey[] = STARTING_DECK, orderedHand = true): void {
     this.heroHp = this.heroMaxHp;
     this.foeHp = this.foeMaxHp;
@@ -70,6 +77,8 @@ export class Battle {
     this.turn = 1;
     this.units.splice(0);
     this.nextUnitId = 1000;
+    this.elderSpellCast = false;
+    this.pendingEnemySpell = 0;
     this.phase = 'player';
     this.discardPile = [];
     this.exhaustPile = [];
@@ -137,6 +146,7 @@ export class Battle {
       mined: false,
     };
     this.units.push(unit);
+    this.refreshEnemyPower();
     this.revision++;
     return { ok: true, message: def.title, unit };
   }
@@ -152,6 +162,90 @@ export class Battle {
       if (!occupied(c, r)) return { col: c, row: r };
     }
     return null;
+  }
+
+  private occupied(col: number, row: number): boolean {
+    return this.units.some(unit => unit.col === col && unit.row === row)
+      || this.mines.some(mine => mine.col === col && mine.row === row);
+  }
+
+  private ventCount(col: number, row: number): number {
+    let count = 0;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const c = col + dc;
+      const r = row + dr;
+      if (c < 0 || r < 0 || c >= this.cols || r >= this.rows) continue;
+      if (!this.occupied(c, r)) count++;
+    }
+    return count;
+  }
+
+  private refreshEnemyPower(): void {
+    for (const unit of this.units) {
+      if (unit.owner === 'enemy') unit.attack = this.ventCount(unit.col, unit.row);
+    }
+  }
+
+  private enemyHomeCell(): { col: number; row: number } | null {
+    const spots: Array<[number, number]> = [[3, 2], [4, 2], [3, 1], [3, 3], [4, 1], [4, 3], [2, 2], [4, 0], [4, 4]];
+    for (const [col, row] of spots) {
+      if (this.firstOpenCell(col, row)) return { col, row };
+    }
+    return this.firstOpenCell();
+  }
+
+  ventCells(): Array<{ col: number; row: number }> {
+    const cells: Array<{ col: number; row: number }> = [];
+    for (const unit of this.units) {
+      if (unit.owner !== 'enemy') continue;
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const col = unit.col + dc;
+        const row = unit.row + dr;
+        if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) continue;
+        if (this.occupied(col, row)) continue;
+        if (!cells.some(cell => cell.col === col && cell.row === row)) cells.push({ col, row });
+      }
+    }
+    return cells;
+  }
+
+  enemyIncoming(): { total: number; vents: number; spell: number; minion: boolean } {
+    this.refreshEnemyPower();
+    const minion = this.units.some(unit => unit.owner === 'enemy');
+    const vents = minion
+      ? this.units.filter(unit => unit.owner === 'enemy').reduce((sum, unit) => sum + (unit.attack ?? 0), 0)
+      : (() => {
+        const home = this.enemyHomeCell();
+        return home ? this.ventCount(home.col, home.row) : 0;
+      })();
+    const spell = this.pendingEnemySpell;
+    return { total: vents + spell, vents, spell, minion };
+  }
+
+  prepareEnemyTurn(): EnemyAction {
+    if (this.phase !== 'enemy') return { type: 'idle' };
+    const existing = this.units.find(unit => unit.owner === 'enemy');
+    if (!existing) {
+      const cell = this.enemyHomeCell();
+      if (!cell) return { type: 'idle' };
+      const unit: BoardUnit = {
+        id: this.nextUnitId++, owner: 'enemy', kind: 'tutor',
+        col: cell.col, row: cell.row, source: 'tutor',
+        attack: 0, armor: 0, energy: 0, mined: false,
+      };
+      this.units.push(unit);
+      this.refreshEnemyPower();
+      this.revision++;
+      return { type: 'minion', unit };
+    }
+    this.refreshEnemyPower();
+    if (!this.elderSpellCast && this.turn >= 3) {
+      this.elderSpellCast = true;
+      this.pendingEnemySpell = 4;
+      this.revision++;
+      return { type: 'spell', title: '余烬', damage: 4 };
+    }
+    return { type: 'idle' };
   }
 
   /** Resolve every persistent player unit together at the end of the player's turn. */
@@ -233,16 +327,18 @@ export class Battle {
   }
   strikeEnemy(): { damage: number; blocked: number; intentDamage: number; boardDamage: number } | null {
     if (this.phase !== 'enemy') return null;
+    this.refreshEnemyPower();
     const boardDamage = this.units.filter(unit => unit.owner === 'enemy').reduce((sum, unit) => sum + (unit.attack ?? 0), 0);
-    const incoming = this.intent + boardDamage;
+    const spell = this.pendingEnemySpell;
+    this.pendingEnemySpell = 0;
+    const incoming = this.intent + boardDamage + spell;
     const blocked = Math.min(this.block, incoming);
     const damage = Math.min(this.heroHp, incoming - blocked);
     this.heroHp -= damage;
     this.block = 0;
-    for (let i = this.units.length - 1; i >= 0; i--) if (this.units[i]!.owner === 'enemy') this.units.splice(i, 1);
     if (this.heroHp <= 0) this.phase = 'lost';
     this.revision++;
-    return { damage, blocked, intentDamage: this.intent, boardDamage };
+    return { damage, blocked, intentDamage: this.intent + spell, boardDamage };
   }
 
   beginPlayerTurn(): boolean {
@@ -257,6 +353,8 @@ export class Battle {
   }
 
   resolveEnemy(): { damage: number; blocked: number } | null {
+    if (this.phase !== 'enemy') return null;
+    this.prepareEnemyTurn();
     const hit = this.strikeEnemy();
     if (hit && this.phase === 'enemy') this.beginPlayerTurn();
     return hit;

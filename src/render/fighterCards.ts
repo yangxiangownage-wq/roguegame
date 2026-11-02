@@ -245,14 +245,12 @@ export class FighterCards {
   setBattle(battle: Battle): void {
     if (this.battleRevision === battle.revision) return;
     this.battleRevision = battle.revision;
-    const boardThreat = battle.units
-      .filter(unit => unit.owner === 'enemy')
-      .reduce((total, unit) => total + (unit.attack ?? 0), 0);
     const boardAttack = battle.units
       .filter(unit => unit.owner === 'player')
       .reduce((total, unit) => total + (unit.attack ?? 0), 0);
+    const incoming = battle.enemyIncoming();
     Object.assign(this.fighters[0]!, { hp: battle.heroHp, maxHp: battle.heroMaxHp, atk: boardAttack, armor: battle.block, statLabel: undefined });
-    Object.assign(this.fighters[1]!, { hp: battle.foeHp, maxHp: battle.foeMaxHp, atk: battle.intent + boardThreat, statLabel: '来袭' });
+    Object.assign(this.fighters[1]!, { hp: battle.foeHp, maxHp: battle.foeMaxHp, atk: incoming.total, statLabel: '来袭' });
     this.syncHpTrails();
     this.redrawCards();
   }

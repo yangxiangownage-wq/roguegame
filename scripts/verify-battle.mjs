@@ -46,12 +46,12 @@ const conserved = b => {
   assert(b.endTurn());
   assert.equal(b.endTurn(), false);
   assert.equal(b.hand.length, 0);
-  assert.deepEqual(b.resolveEnemy(), { damage: 2, blocked: 4, intentDamage: 6, boardDamage: 0 });
+  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 4, intentDamage: 0, boardDamage: 4 });
   assert.equal(b.energy, 3);
   assert.equal(b.block, 0);
-  assert.equal(b.heroHp, 18);
-  assert.equal(b.intent, 8);
-  assert.equal(b.units.some(unit => unit.owner === 'enemy'), false, 'first fight does not spawn board threats');
+  assert.equal(b.heroHp, 20);
+  assert.equal(b.intent, 0);
+  assert.equal(b.units.some(unit => unit.owner === 'enemy' && unit.source === 'tutor'), true, 'elder leaves a minion on the board');
   assert.equal(b.resolveEnemy(), null, 'enemy only acts once per end turn');
   conserved(b);
 }
@@ -59,8 +59,8 @@ const conserved = b => {
   const b = fresh();
   b.play(cardId(b, 'leap'));
   b.endTurn();
-  assert.deepEqual(b.resolveEnemy(), { damage: 2, blocked: 4, intentDamage: 6, boardDamage: 0 });
-  assert.equal(b.heroHp, 18);
+  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 4, intentDamage: 0, boardDamage: 4 });
+  assert.equal(b.heroHp, 20);
   b.draw(100);
   assert.equal(b.hand.length, 10, 'hand limit');
   conserved(b);
@@ -155,3 +155,17 @@ console.log('Placement checks passed: spend, duplicate prevention, energy, refil
   assert.equal(b.hand.length, 2);
 }
 console.log('Spell checks passed: instant resolve, no board piece, exhaust pile.');
+{
+  const b = fresh();
+  assert(b.placeCard(cardId(b, 'blade'), 2, 2).ok);
+  assert(b.placeCard(cardId(b, 'leap'), 3, 1).ok);
+  assert(b.endTurn());
+  const hit = b.resolveEnemy();
+  const tutor = b.units.find(unit => unit.owner === 'enemy');
+  assert.equal(tutor.col, 3);
+  assert.equal(tutor.row, 2);
+  assert.equal(hit.boardDamage, 2, 'occupied neighbors starve the minion vents');
+  assert.equal(tutor.attack, 2);
+  conserved(b);
+}
+console.log('Elder minion checks passed: same board, adjacent empty cells cast spells.');
