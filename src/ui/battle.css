@@ -252,28 +252,9 @@
   position: absolute;
   inset: 0;
   z-index: 2;
-  overflow: hidden;
-  border-radius: 14px;
   background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat;
   pointer-events: none;
   filter: saturate(.75);
-}
-.hand-card__frame::after {
-  content: '';
-  position: absolute;
-  inset: -8% -30%;
-  background: linear-gradient(
-    118deg,
-    transparent 40%,
-    rgba(255, 236, 196, 0) 46%,
-    rgba(255, 244, 214, .28) 50%,
-    rgba(255, 236, 196, 0) 54%,
-    transparent 60%
-  );
-  mix-blend-mode: soft-light;
-  pointer-events: none;
-  animation: card-frame-sheen 8.4s ease-in-out infinite;
-  animation-delay: var(--card-idle, 0s);
 }
 .hand-card__art {
   position: absolute;
@@ -292,9 +273,6 @@
   object-fit: contain;
   object-position: 50% 46%;
   pointer-events: none;
-  transform-origin: 50% 62%;
-  animation: card-art-breathe 5.6s ease-in-out infinite;
-  animation-delay: var(--card-idle, 0s);
 }
 .hand-card--imp .hand-card__art img { object-fit: contain; object-position: 50% 48%; }
 .hand-card__art::after {
@@ -316,8 +294,6 @@
   color: #f6e7c4;
   font: 700 16px Georgia, serif;
   text-shadow: 0 1px 0 #2a1a10, 0 1px 3px #120806;
-  animation: card-cost-idle 4.8s ease-in-out infinite;
-  animation-delay: calc(var(--card-idle, 0s) - .6s);
 }
 .hand-card__title {
   position: absolute;
@@ -423,29 +399,11 @@
 .hand-card:nth-child(5n+3) { --card-idle: -2.4s; }
 .hand-card:nth-child(5n+4) { --card-idle: -3.5s; }
 .hand-card:nth-child(5n+5) { --card-idle: -4.7s; }
-.hand-card.is-dragged .hand-card__art img,
-.hand-card.is-pressed .hand-card__art img,
-.hand-card.is-dragged .hand-card__frame::after,
-.hand-card.is-pressed .hand-card__frame::after,
-.hand-card.is-dragged .hand-card__cost,
-.hand-card.is-pressed .hand-card__cost,
 .hand-card.is-dragged .card-keyword,
 .hand-card.is-pressed .card-keyword {
   animation-play-state: paused;
 }
 
-@keyframes card-art-breathe {
-  0%, 100% { translate: 0 0; scale: 1; }
-  50% { translate: 0 -3px; scale: 1.045; }
-}
-@keyframes card-frame-sheen {
-  0%, 62%, 100% { translate: -22% 0; opacity: .12; }
-  78% { translate: 22% 0; opacity: .9; }
-}
-@keyframes card-cost-idle {
-  0%, 100% { rotate: -2deg; filter: brightness(.96); }
-  50% { rotate: 2.2deg; filter: brightness(1.14); }
-}
 @keyframes card-keyword-glow {
   0%, 100% { text-shadow: 0 1px 0 #2a1808, 0 0 8px #c4a66b66; }
   50% { text-shadow: 0 1px 0 #2a1808, 0 0 16px #f0cc6aaa; }
@@ -695,6 +653,12 @@
   transform-origin: top center;
   pointer-events: none;
   box-shadow: 0 10px 18px #080706aa;
+  animation: shop-card-breathe 5.6s ease-in-out infinite;
+  animation-delay: var(--card-idle, 0s);
+}
+@keyframes shop-card-breathe {
+  0%, 100% { transform: translateX(-50%) scale(0.62); }
+  50% { transform: translateX(-50%) scale(0.632); }
 }
 .shop-slot__tag {
   position: absolute;
@@ -758,10 +722,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .battle-ui *, .battle-ui *::before, .battle-ui *::after { transition: none !important; }
-  .hand-card__art img,
-  .hand-card__frame::after,
-  .hand-card__cost,
-  .card-keyword {
+  .card-keyword,
+  .shop-slot .hand-card {
     animation: none !important;
   }
 }

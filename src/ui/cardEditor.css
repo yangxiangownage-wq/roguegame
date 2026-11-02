@@ -17,9 +17,6 @@
 .card-editor-preview .hand-card {
   position: relative;
 }
-.card-editor-preview .hand-card__art img,
-.card-editor-preview .hand-card__frame::after,
-.card-editor-preview .hand-card__cost,
 .card-editor-preview .card-keyword {
   animation: none;
 }

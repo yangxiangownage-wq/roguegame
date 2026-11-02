@@ -52,6 +52,9 @@ const DEAL_STAGGER = 0.04;
 const SETTLEMENT_IMPACT = 0.065;
 const CARD_SPRING_STIFFNESS = 260;
 const CARD_SPRING_DAMPING = 25;
+const CARD_BREATHE_PERIOD = 5.6;
+const CARD_BREATHE_SCALE = 0.02;
+const CARD_BREATHE_LIFT = 2;
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 const ease = (t: number) => 1 - Math.pow(1 - t, 3);
 const mixHex = (from: string, to: string, t: number) => {
@@ -116,6 +119,7 @@ export class BattleView {
   private turnPause = 0;
   private revealBeforeDiscard = 0;
   private turnCue: 'none' | 'enemy-strike' | 'player-deal' = 'none';
+  private talking = false;
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   constructor(
@@ -238,8 +242,14 @@ export class BattleView {
   }
 
   private point(event: PointerEvent) { return clientToDesign(event.clientX, event.clientY, computeDesignFit()); }
+  setTalking(talking: boolean): void {
+    this.talking = talking;
+    this.root.classList.toggle('is-talking', talking);
+    if (talking) this.cancel(false);
+  }
+
   private overlayOpen(): boolean {
-    return !this.result.hidden || !this.pileDialog.hidden || !this.shop.hidden;
+    return this.talking || !this.result.hidden || !this.pileDialog.hidden || !this.shop.hidden;
   }
   private cardAria(def: (typeof CARD_DEFS)[BattleCard['key']]): string {
     const tags = keywordLabels(def.keywords);
@@ -1287,7 +1297,9 @@ export class BattleView {
       const p = node.pose;
       const tactileScale = this.reduced.matches || scripted ? 1 : 1 - node.press * 0.08 + rebound;
       const cardScale = this.settings.handCardScale / 100;
-      node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150}px, 0) rotate(${p.angle}deg) scale(${p.scale * tactileScale * cardScale}) scaleY(${1 - fold * 0.92})`;
+      const idle = !this.reduced.matches && !scripted && node.state === 'hand' && !pressed && !dragging;
+      const wave = idle ? Math.sin(node.elapsed * Math.PI * 2 / CARD_BREATHE_PERIOD + id * 1.618) : 0;
+      node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150 - wave * CARD_BREATHE_LIFT}px, 0) rotate(${p.angle}deg) scale(${p.scale * tactileScale * cardScale * (1 + wave * CARD_BREATHE_SCALE)}) scaleY(${1 - fold * 0.92})`;
       node.element.style.zIndex = String(node.state === 'discard' ? 30 + node.layer : node.state !== 'hand' ? 40 : active ? 30 : index + 1);
       node.element.classList.toggle('is-selected', active && node.state === 'hand');
       node.element.classList.toggle('is-pressed', !!pressed);

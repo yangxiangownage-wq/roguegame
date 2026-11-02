@@ -32,6 +32,12 @@ let hitAudio: AudioContext | null = null;
 let hitSources: AudioScheduledSourceNode[] = [];
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+// Red fill snaps in ~0.08s; white remnant holds briefly, then drains at a constant HP/s.
+const HP_FILL_K = 26;
+const HP_GHOST_HOLD = 0.14;
+const HP_GHOST_SPEED = 28;
+const HP_SNAP = 0.04;
+type HpTrail = { target: number; fill: number; ghost: number; hold: number };
 
 // Damped displacement with an explicit initial velocity: recoil carries momentum
 // through the rest position instead of stopping there like an eased interpolation.
@@ -202,13 +208,17 @@ export class FighterCards {
   private originHero: FighterPose | null = null;
   private originFoe: FighterPose | null = null;
   private settlementPreview: { attack: number; armor: number; foeHp?: number } | null = null;
+  private readonly hpTrails: HpTrail[] = FIGHTERS.map(f => ({ target: f.hp, fill: f.hp, ghost: f.hp, hold: 0 }));
+  private readonly reducedMotion = typeof matchMedia === 'function'
+    ? matchMedia('(prefers-reduced-motion: reduce)')
+    : { matches: false };
   private constructor(
     private readonly portraits: HTMLImageElement[],
     private readonly frame: HTMLImageElement,
     private readonly fxDust: HTMLImageElement | null,
     private readonly fxStar: HTMLImageElement | null,
   ) {
-    // The portraits and stats are static: rasterize once at the maximum stage DPR.
+    // Rasterize at the maximum stage DPR; HP trails re-blit the cards while catching up.
     for (let i = 0; i < FIGHTERS.length; i++) {
       const card = document.createElement('canvas');
       card.width = CARD_W * 2;
@@ -243,12 +253,60 @@ export class FighterCards {
       .reduce((total, unit) => total + (unit.attack ?? 0), 0);
     Object.assign(this.fighters[0]!, { hp: battle.heroHp, maxHp: battle.heroMaxHp, atk: boardAttack, armor: battle.block, statLabel: undefined });
     Object.assign(this.fighters[1]!, { hp: battle.foeHp, maxHp: battle.foeMaxHp, atk: battle.intent + boardThreat, statLabel: '来袭' });
+    this.syncHpTrails();
     this.redrawCards();
   }
 
   setSettlementPreview(values: { attack: number; armor: number; foeHp?: number } | null): void {
     this.settlementPreview = values;
+    this.syncHpTrails();
     this.redrawCards();
+  }
+
+  private shownHp(i: number): number {
+    const f = this.fighters[i]!;
+    const raw = i === 1 ? this.settlementPreview?.foeHp ?? f.hp : f.hp;
+    return Math.max(0, Math.min(raw, f.maxHp));
+  }
+
+  private syncHpTrails(): void {
+    const reduced = this.reducedMotion.matches;
+    for (let i = 0; i < this.hpTrails.length; i++) {
+      const trail = this.hpTrails[i]!;
+      const hp = this.shownHp(i);
+      if (reduced) {
+        trail.target = trail.fill = trail.ghost = hp;
+        trail.hold = 0;
+        continue;
+      }
+      if (hp < trail.target - 0.001) {
+        trail.ghost = Math.max(trail.ghost, trail.fill);
+        trail.hold = HP_GHOST_HOLD;
+      } else if (hp > trail.target + 0.001) {
+        trail.fill = trail.ghost = hp;
+        trail.hold = 0;
+      }
+      trail.target = hp;
+    }
+  }
+
+  private updateHpTrails(dt: number): boolean {
+    let moved = false;
+    for (const trail of this.hpTrails) {
+      const prevFill = trail.fill;
+      const prevGhost = trail.ghost;
+      trail.fill += (trail.target - trail.fill) * (1 - Math.exp(-HP_FILL_K * dt));
+      if (Math.abs(trail.fill - trail.target) < HP_SNAP) trail.fill = trail.target;
+      if (trail.hold > 0) trail.hold = Math.max(0, trail.hold - dt);
+      else if (trail.ghost > trail.fill) {
+        trail.ghost = Math.max(trail.fill, trail.ghost - HP_GHOST_SPEED * dt);
+        if (trail.ghost - trail.fill < HP_SNAP) trail.ghost = trail.fill;
+      } else {
+        trail.ghost = trail.fill;
+      }
+      if (trail.fill !== prevFill || trail.ghost !== prevGhost) moved = true;
+    }
+    return moved;
   }
 
   private redrawCards(): void {
@@ -346,6 +404,7 @@ export class FighterCards {
       if (shakeDone(this.shakeAge, this.feel.duration)) this.shakeAmp = 0;
     }
     if (this.burst && !updateImpact(this.burst, dt)) this.burst = null;
+    if (this.updateHpTrails(dt)) this.redrawCards();
     const strike = this.strike;
     if (!strike) return;
     strike.elapsed += dt;
@@ -620,9 +679,12 @@ export class FighterCards {
     g.fillStyle = rule;
     g.fillRect(x + 30, y + 398, w - 60, 1);
 
-    const shownHp = i === 1 ? this.settlementPreview?.foeHp ?? f.hp : f.hp;
-    const hp = Math.max(0, Math.min(shownHp, f.maxHp));
-    const ratio = f.maxHp > 0 ? hp / f.maxHp : 0;
+    const hp = this.shownHp(i);
+    const trail = this.hpTrails[i]!;
+    const maxHp = Math.max(1, f.maxHp);
+    const fillRatio = clamp01(trail.fill / maxHp);
+    const ghostRatio = clamp01(Math.max(trail.ghost, trail.fill) / maxHp);
+    const ratio = clamp01(hp / maxHp);
     const low = ratio > 0 && ratio <= 0.25;
     g.textAlign = 'left';
     g.fillStyle = low ? '#e9a08b' : '#bcaa8b';
@@ -637,6 +699,8 @@ export class FighterCards {
     const barY = y + 437;
     const barW = w - 60;
     const barH = 16;
+    const innerW = barW - 6;
+    const innerH = barH - 6;
     roundRect(g, barX, barY, barW, barH, 4);
     g.fillStyle = '#0e0d0c';
     g.fill();
@@ -645,17 +709,25 @@ export class FighterCards {
     g.stroke();
     // Clip the fill so zero HP is truly empty and tiny values remain proportional.
     g.save();
-    roundRect(g, barX + 3, barY + 3, barW - 6, barH - 6, 2);
+    roundRect(g, barX + 3, barY + 3, innerW, innerH, 2);
     g.clip();
+    if (ghostRatio > fillRatio + 0.002) {
+      const ghost = g.createLinearGradient(0, barY + 3, 0, barY + barH - 3);
+      ghost.addColorStop(0, '#fffdf6');
+      ghost.addColorStop(0.45, '#f3ead4');
+      ghost.addColorStop(1, '#d8cbb0');
+      g.fillStyle = ghost;
+      g.fillRect(barX + 3, barY + 3, innerW * ghostRatio, innerH);
+    }
     const fill = g.createLinearGradient(0, barY + 3, 0, barY + barH - 3);
     fill.addColorStop(0, low ? '#e88465' : '#c96550');
     fill.addColorStop(0.45, low ? '#c54b38' : '#a73f35');
     fill.addColorStop(1, '#6f2527');
     g.fillStyle = fill;
-    g.fillRect(barX + 3, barY + 3, (barW - 6) * ratio, barH - 6);
+    g.fillRect(barX + 3, barY + 3, innerW * fillRatio, innerH);
     g.fillStyle = 'rgba(22, 12, 12, 0.5)';
     for (let n = 1; n < 4; n++) {
-      g.fillRect(barX + 3 + (barW - 6) * n / 4, barY + 3, 1, barH - 6);
+      g.fillRect(barX + 3 + innerW * n / 4, barY + 3, 1, innerH);
     }
     g.restore();
     g.restore();

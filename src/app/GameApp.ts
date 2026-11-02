@@ -14,6 +14,7 @@ import { mountBoardInspector } from '@/ui/BoardInspector';
 import { mountHudInspector } from '@/ui/HudInspector';
 import { mountFeelInspector } from '@/ui/FeelInspector';
 import { loadHitFeelSave } from '@/config/hitFeel';
+import { TalkView } from '@/ui/TalkView';
 
 export class GameApp {
   private readonly canvas: HTMLCanvasElement;
@@ -22,6 +23,7 @@ export class GameApp {
   private readonly fighters: FighterCards;
   private readonly settings: BoardSettings;
   private readonly battleView: BattleView;
+  private talk: TalkView | null = null;
   private fit: DesignFit;
   private dpr = 1;
   private lastTs = 0;
@@ -49,6 +51,11 @@ export class GameApp {
     this.fighters.setHitFeel(hitFeel);
     mountFeelInspector(feelPanel, hitFeel, hitFeel, this.fighters);
     this.battleView = new BattleView(this.settings, this.board, this.fighters);
+    this.battleView.setTalking(true);
+    this.talk = new TalkView(() => {
+      this.talk = null;
+      this.battleView.setTalking(false);
+    });
     this.fit = applyDesignStage();
     this.bindResize();
     this.bindPointer();
@@ -84,6 +91,7 @@ export class GameApp {
     };
     this.canvas.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
+      if (this.talk?.isOpen()) return;
       const design = toDesign(e);
       if (this.battleView.targetClick(design.x, design.y)) { this.board.pointerCancel(); return; }
       const p = toBoard(design);
@@ -91,10 +99,15 @@ export class GameApp {
     });
     this.canvas.addEventListener('pointerup', (e) => {
       if (e.button !== 0) return;
+      if (this.talk?.isOpen()) return;
       const p = toBoard(toDesign(e));
       this.board.pointerUp(p.x, p.y, this.settings);
     });
     this.canvas.addEventListener('pointermove', (e) => {
+      if (this.talk?.isOpen()) {
+        this.canvas.style.cursor = 'default';
+        return;
+      }
       const p = toBoard(toDesign(e));
       const onTile = this.board.pointerMove(p.x, p.y, this.settings);
       this.canvas.style.cursor = onTile ? 'pointer' : 'default';
@@ -139,7 +152,7 @@ export class GameApp {
     const shake = this.fighters.cameraShake();
     this.ctx.translate(shake.x, shake.y);
     this.board.draw(this.ctx, this.settings);
-    this.fighters.draw(this.ctx, this.settings);
+    if (!this.talk?.isOpen()) this.fighters.draw(this.ctx, this.settings);
     this.ctx.restore();
   }
 }
