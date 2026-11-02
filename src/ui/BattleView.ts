@@ -121,6 +121,7 @@ export class BattleView {
   private revealBeforeDiscard = 0;
   private turnCue: 'none' | 'enemy-play' | 'enemy-strike' | 'player-deal' = 'none';
   private elderFlight = false;
+  private spawnGen = 0;
   private talking = false;
   private readonly reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -398,9 +399,13 @@ export class BattleView {
     this.end.disabled = b.phase !== 'player' || this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing();
     this.syncTurnHud();
     const incoming = b.enemyIncoming();
-    const detail = incoming.minion
-      ? (incoming.spell ? `邻格法术 ${incoming.vents} · 余烬 ${incoming.spell}` : `空邻格法术 ${incoming.vents}`)
-      : '回合结束后放下随从';
+    const detail = !incoming.minion
+      ? '回合结束后放下随从'
+      : incoming.total
+        ? `已生成，下回合打出${incoming.vents ? ` · 空邻格再酝酿 ${incoming.vents}` : ''}`
+        : incoming.vents
+          ? `空邻格酝酿 ${incoming.vents} 张，回合结束才生成`
+          : '邻格都被堵住了';
     this.intent.innerHTML = `<span>来袭伤害</span><strong>${incoming.total}</strong><small>${detail}</small>`;
     this.intent.hidden = b.phase === 'won' || b.phase === 'lost';
     this.syncGuardHud();
@@ -891,12 +896,12 @@ export class BattleView {
 
   private playElderAction(action: EnemyAction): void {
     if (action.type === 'minion') {
-      this.message('老者放下学徒：空着的邻格会喷出法术');
+      this.message('老者放下学徒：撞完之后，空邻格才会生成法术');
       this.flyElderMinion(action.unit);
       return;
     }
     if (action.type === 'spell') {
-      this.message(`老者打出${action.title}：立刻造成 ${action.damage} 点伤害`);
+      this.message(`老者打出${action.title}`);
       this.turnCue = 'enemy-strike';
       this.turnPause = this.reduced.matches ? 0.08 : 0.7;
       this.sync();
@@ -945,6 +950,41 @@ export class BattleView {
     };
   }
 
+  private finishEnemyMinionProduce(vents: Array<{ col: number; row: number }>, onDone: () => void): void {
+    const tutor = this.battle.units.find(unit => unit.owner === 'enemy' && unit.kind === 'tutor');
+    if (!vents.length || !tutor || this.reduced.matches) {
+      const generated = this.battle.generateMinionSpells();
+      if (vents.length) this.board.pulseVents(vents);
+      this.board.syncUnits(this.battle.units);
+      this.message(generated ? `学徒生成 ${generated} 张法术，下回合打出` : '学徒没有空邻格，没有生成法术');
+      this.sync();
+      onDone();
+      return;
+    }
+    const gen = ++this.spawnGen;
+    this.elderFlight = true;
+    this.board.pulseSettlement([tutor.id]);
+    this.board.pulseVents(vents);
+    this.message('学徒把法术刷上邻格');
+    const timing = this.board.playSpellPaint({ col: tutor.col, row: tutor.row }, vents);
+    window.setTimeout(() => {
+      if (this.spawnGen !== gen) return;
+      const generated = this.battle.generateMinionSpells();
+      this.board.syncUnits(this.battle.units);
+      this.message(`学徒生成 ${generated} 张法术，下回合打出`);
+      this.sync();
+      this.intent.animate(
+        [{ transform: 'translateX(-50%) scale(1)' }, { transform: 'translateX(-50%) scale(1.08)' }, { transform: 'translateX(-50%) scale(1)' }],
+        { duration: 280, easing: 'ease-out' },
+      );
+    }, timing.armAt * 1000);
+    window.setTimeout(() => {
+      if (this.spawnGen !== gen) return;
+      this.elderFlight = false;
+      onDone();
+    }, timing.total * 1000);
+  }
+
   private advanceTurnCue(): void {
     if (this.turnCue === 'enemy-play') {
       if (this.elderFlight) return;
@@ -953,26 +993,56 @@ export class BattleView {
       return;
     }
     if (this.turnCue === 'enemy-strike') {
+      const preview = this.battle.enemyStrikePreview();
       const vents = this.battle.ventCells();
-      if (vents.length) this.board.pulseVents(vents);
-      const hit = this.battle.strikeEnemy();
       this.turnCue = 'none';
-      if (!hit) return;
-      this.board.syncUnits(this.battle.units);
-      const layout = battleLayout(this.settings);
-      if (hit.damage > 0) {
-        this.float(`-${hit.damage}`, layout.heroX, layout.heroBottom - 72);
-        this.message(hit.boardDamage
-          ? `学徒邻格喷出 ${hit.boardDamage} 点法术`
-          : `老者造成 ${hit.damage} 点伤害`);
-      } else {
-        this.float(`格挡 ${hit.blocked}`, layout.heroX, layout.heroBottom - 72, 'block');
-        this.message('护甲挡住了全部伤害');
+      if (preview.total <= 0) {
+        this.battle.strikeEnemy();
+        this.finishEnemyMinionProduce(vents, () => {
+          this.turnCue = 'player-deal';
+          this.turnPause = this.reduced.matches ? 0.05 : 0.22;
+        });
+        return;
       }
-      this.sync();
-      if (this.battle.phase === 'lost') return;
-      this.turnCue = 'player-deal';
-      this.turnPause = this.reduced.matches ? 0.05 : 0.65;
+      const playStrike = () => {
+      this.combatAnimating = true;
+      this.syncTurnHud();
+      this.fighters.playStrike({
+        damage: preview.total,
+        attacker: 'foe',
+        reducedMotion: this.reduced.matches,
+        onImpact: () => {
+          const hit = this.battle.strikeEnemy();
+          if (!hit) return;
+          this.board.syncUnits(this.battle.units);
+          if (hit.damage > 0) this.message(`老者打出法术，造成 ${hit.damage} 点伤害`);
+          else this.message('护甲挡住了全部伤害');
+          this.sync();
+        },
+        onComplete: () => {
+          this.combatAnimating = false;
+          this.syncTurnHud();
+          if (this.battle.phase === 'lost') return;
+          this.finishEnemyMinionProduce(this.battle.ventCells(), () => {
+            this.turnCue = 'player-deal';
+            this.turnPause = this.reduced.matches ? 0.05 : 0.22;
+          });
+        },
+      });
+      };
+      const release = this.reduced.matches ? 0 : this.board.releaseSpellPaints();
+      if (release <= 0) {
+        playStrike();
+        return;
+      }
+      this.message('邻格法术打出');
+      this.elderFlight = true;
+      const gen = ++this.spawnGen;
+      window.setTimeout(() => {
+        if (this.spawnGen !== gen) return;
+        this.elderFlight = false;
+        playStrike();
+      }, release * 1000);
       return;
     }
     if (this.turnCue === 'player-deal') {
@@ -1036,6 +1106,8 @@ export class BattleView {
     this.turnPause = 0;
     this.turnCue = 'none';
     this.elderFlight = false;
+    this.spawnGen += 1;
+    this.board.clearSpellPaints();
     for (const card of this.root.querySelectorAll('.is-elder-play')) card.remove();
     this.board.syncUnits([]);
   }

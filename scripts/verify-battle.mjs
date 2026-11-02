@@ -46,12 +46,13 @@ const conserved = b => {
   assert(b.endTurn());
   assert.equal(b.endTurn(), false);
   assert.equal(b.hand.length, 0);
-  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 4, intentDamage: 0, boardDamage: 4 });
+  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 0, intentDamage: 0, boardDamage: 0 });
   assert.equal(b.energy, 3);
-  assert.equal(b.block, 0);
+  assert.equal(b.block, 4, 'armor stays until a spell is actually played');
   assert.equal(b.heroHp, 20);
   assert.equal(b.intent, 0);
   assert.equal(b.units.some(unit => unit.owner === 'enemy' && unit.source === 'tutor'), true, 'elder leaves a minion on the board');
+  assert.equal(b.enemyIncoming().armed, 4, 'empty neighbors arm spells for next turn');
   assert.equal(b.resolveEnemy(), null, 'enemy only acts once per end turn');
   conserved(b);
 }
@@ -59,8 +60,9 @@ const conserved = b => {
   const b = fresh();
   b.play(cardId(b, 'leap'));
   b.endTurn();
-  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 4, intentDamage: 0, boardDamage: 4 });
+  assert.deepEqual(b.resolveEnemy(), { damage: 0, blocked: 0, intentDamage: 0, boardDamage: 0 });
   assert.equal(b.heroHp, 20);
+  assert.equal(b.enemyIncoming().armed, 4);
   b.draw(100);
   assert.equal(b.hand.length, 10, 'hand limit');
   conserved(b);
@@ -160,12 +162,15 @@ console.log('Spell checks passed: instant resolve, no board piece, exhaust pile.
   assert(b.placeCard(cardId(b, 'blade'), 2, 2).ok);
   assert(b.placeCard(cardId(b, 'leap'), 3, 1).ok);
   assert(b.endTurn());
-  const hit = b.resolveEnemy();
+  const first = b.resolveEnemy();
   const tutor = b.units.find(unit => unit.owner === 'enemy');
   assert.equal(tutor.col, 3);
   assert.equal(tutor.row, 2);
-  assert.equal(hit.boardDamage, 2, 'occupied neighbors starve the minion vents');
-  assert.equal(tutor.attack, 2);
+  assert.equal(first.boardDamage, 0, 'generated spells do not fire the same turn');
+  assert.equal(b.enemyIncoming().armed, 2, 'occupied neighbors starve the minion vents');
+  assert(b.endTurn());
+  const hit = b.resolveEnemy();
+  assert.equal(hit.boardDamage, 2, 'armed spells fire the following turn');
   conserved(b);
 }
 console.log('Elder minion checks passed: same board, adjacent empty cells cast spells.');

@@ -21,6 +21,7 @@ const CARD_GAP = 36;
 type StrikeRequest = {
   damage: number;
   reducedMotion: boolean;
+  attacker?: 'hero' | 'foe';
   onImpact: () => void;
   onComplete: () => void;
 };
@@ -422,11 +423,14 @@ export class FighterCards {
         this.shakeAmp = shakeAmplitude(this.feel, strike.damage);
         const hero = this.originHero;
         const foe = this.originFoe;
-        const dir = hero && foe && foe.x < hero.x ? -1 : 1;
+        const towardFoe = hero && foe && foe.x >= hero.x ? 1 : -1;
+        const dir = strike.attacker === 'foe' ? -towardFoe : towardFoe;
         this.shakeDir = dir;
         if (hero && foe && !strike.fxSpawned) {
           strike.fxSpawned = true;
-          this.spawnContactFx(dir, hero, foe, strike.damage);
+          const from = strike.attacker === 'foe' ? foe : hero;
+          const to = strike.attacker === 'foe' ? hero : foe;
+          this.spawnContactFx(dir, from, to, strike.damage);
         }
       }
       strike.onImpact();
@@ -543,21 +547,25 @@ export class FighterCards {
     const timing = strike.reducedMotion ? REDUCED_STRIKE : STRIKE;
     const age = strike.elapsed - timing.impact;
     const hit = strike.impacted;
-    const direction = foe.x >= hero.x ? 1 : -1;
+    const fromFoe = strike.attacker === 'foe';
+    const attackerOrigin = fromFoe ? foe : hero;
+    const defenderOrigin = fromFoe ? hero : foe;
+    const attackerIndex = fromFoe ? 1 : 0;
+    const defenderIndex = fromFoe ? 0 : 1;
+    const direction = fromFoe ? (hero.x >= foe.x ? 1 : -1) : (foe.x >= hero.x ? 1 : -1);
     if (hit) this.shakeDir = direction;
-    const defender = strike.reducedMotion ? foe : this.defenderPose(strike.elapsed, foe, hero);
-    const attacker = strike.reducedMotion ? hero : this.attackPose(strike.elapsed, hero, foe);
+    const defender = strike.reducedMotion ? defenderOrigin : this.defenderPose(strike.elapsed, defenderOrigin, attackerOrigin);
+    const attacker = strike.reducedMotion ? attackerOrigin : this.attackPose(strike.elapsed, attackerOrigin, defenderOrigin);
     if (hit && !strike.reducedMotion && !strike.fxSpawned) {
       strike.fxSpawned = true;
-      this.spawnContactFx(direction, hero, foe, strike.damage);
+      this.spawnContactFx(direction, attackerOrigin, defenderOrigin, strike.damage);
     }
-    this.paintFighter(g, 1, defender, 1, hit ? Math.exp(-Math.max(0, age) * 38) * 0.55 : 0);
+    this.paintFighter(g, defenderIndex, defender, 1, hit ? Math.exp(-Math.max(0, age) * 38) * 0.55 : 0);
     if (!strike.reducedMotion && strike.elapsed > STRIKE.windup + 0.05 && strike.elapsed < STRIKE.impact) {
-      // Two brief afterimages communicate speed without moving the board or HUD.
-      this.paintFighter(g, 0, this.attackPose(strike.elapsed - 0.036, hero, foe), 0.06);
-      this.paintFighter(g, 0, this.attackPose(strike.elapsed - 0.018, hero, foe), 0.12);
+      this.paintFighter(g, attackerIndex, this.attackPose(strike.elapsed - 0.036, attackerOrigin, defenderOrigin), 0.06);
+      this.paintFighter(g, attackerIndex, this.attackPose(strike.elapsed - 0.018, attackerOrigin, defenderOrigin), 0.12);
     }
-    this.paintFighter(g, 0, attacker);
+    this.paintFighter(g, attackerIndex, attacker);
     if (this.burst) {
       drawImpactBurst(g, this.burst, { dust: this.fxDust ?? undefined, star: this.fxStar ?? undefined });
     }

@@ -19,6 +19,9 @@ const TILE_URLS = [
 ];
 
 const ICON_BUF = 256;
+const SPELL_IN = 0.55;
+const SPELL_OUT = 0.45;
+const SPELL_STAGGER = 0.04;
 
 type Cell = { col: number; row: number };
 
@@ -46,6 +49,12 @@ type TileFx = {
   iconT: number;
   iconDelay: number;
   iconSeed: number;
+  spellT: number;
+  spellDelay: number;
+  spellHold: number;
+  spellPhase: 'off' | 'in' | 'hold' | 'out';
+  spellDirX: number;
+  spellDirY: number;
 };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -152,6 +161,7 @@ export class StoneBoard {
   private constructor(
     private readonly tiles: HTMLImageElement[],
     private readonly icons: Record<PieceKind, HTMLImageElement>,
+    private readonly spellIcon: HTMLCanvasElement,
   ) {
     this.mask = document.createElement('canvas');
     this.mask.width = DISSOLVE_MASK;
@@ -169,15 +179,36 @@ export class StoneBoard {
 
   static async create(): Promise<StoneBoard> {
     const kinds = Object.keys(PIECE_ART) as PieceKind[];
-    const [tiles, iconList] = await Promise.all([
+    const [tiles, iconList, frame] = await Promise.all([
       Promise.all(TILE_URLS.map(loadImage)),
       Promise.all(kinds.map((kind) => loadImage(PIECE_ART[kind]))),
+      loadImage('/assets/ui/card-frame.png').catch(() => null),
     ]);
     const icons = {} as Record<PieceKind, HTMLImageElement>;
     kinds.forEach((kind, index) => {
       icons[kind] = iconList[index]!;
     });
-    return new StoneBoard(tiles, icons);
+    const spellIcon = document.createElement('canvas');
+    spellIcon.width = ICON_BUF;
+    spellIcon.height = ICON_BUF;
+    const sg = spellIcon.getContext('2d')!;
+    const glow = sg.createRadialGradient(ICON_BUF / 2, ICON_BUF * 0.42, 8, ICON_BUF / 2, ICON_BUF * 0.42, ICON_BUF * 0.5);
+    glow.addColorStop(0, '#6b3d8a');
+    glow.addColorStop(1, '#1a1020');
+    sg.fillStyle = glow;
+    sg.fillRect(0, 0, ICON_BUF, ICON_BUF);
+    sg.fillStyle = '#e8c56a';
+    sg.beginPath();
+    sg.moveTo(ICON_BUF * 0.5, ICON_BUF * 0.18);
+    sg.bezierCurveTo(ICON_BUF * 0.34, ICON_BUF * 0.4, ICON_BUF * 0.38, ICON_BUF * 0.58, ICON_BUF * 0.5, ICON_BUF * 0.66);
+    sg.bezierCurveTo(ICON_BUF * 0.62, ICON_BUF * 0.58, ICON_BUF * 0.66, ICON_BUF * 0.4, ICON_BUF * 0.5, ICON_BUF * 0.18);
+    sg.fill();
+    if (frame) sg.drawImage(frame, 0, 0, ICON_BUF, ICON_BUF);
+    sg.fillStyle = '#f0cc6a';
+    sg.font = `700 ${Math.round(ICON_BUF * 0.1)}px Georgia, serif`;
+    sg.textAlign = 'center';
+    sg.fillText('法术', ICON_BUF / 2, ICON_BUF * 0.86);
+    return new StoneBoard(tiles, icons, spellIcon);
   }
 
   /** Enchanted destination highlight while the player is holding a card. */
@@ -243,6 +274,8 @@ export class StoneBoard {
       fx.armor = unit.armor ?? 0;
       fx.energy = unit.energy ?? 0;
       fx.mined = unit.mined ?? false;
+      fx.spellPhase = 'off';
+      fx.spellT = 0;
       if (isNew) {
         fx.iconT = 0;
         fx.iconDelay = newUnitDelay;
@@ -262,6 +295,43 @@ export class StoneBoard {
 
   pulseVents(cells: Array<{ col: number; row: number }>): void {
     for (const cell of cells) this.fxOf(cell).settleT = 0.42;
+  }
+
+  playSpellPaint(from: Cell, cells: Cell[]): { armAt: number; total: number } {
+    cells.forEach((cell, index) => {
+      const fx = this.fxOf(cell);
+      const dx = cell.col - from.col;
+      const dy = cell.row - from.row;
+      const len = Math.hypot(dx, dy) || 1;
+      fx.spellDirX = dx / len;
+      fx.spellDirY = dy / len;
+      fx.spellDelay = index * SPELL_STAGGER;
+      fx.spellT = 0;
+      fx.spellHold = 0;
+      fx.spellPhase = 'in';
+      fx.iconSeed = cell.row * 12.9898 + cell.col * 78.233;
+    });
+    const last = Math.max(0, cells.length - 1) * SPELL_STAGGER;
+    return { armAt: last + SPELL_IN, total: last + SPELL_IN + 0.18 };
+  }
+
+  releaseSpellPaints(): number {
+    let any = false;
+    for (const fx of this.fx.values()) {
+      if (fx.spellPhase === 'off' || fx.spellT <= 0) continue;
+      fx.spellDelay = 0;
+      fx.spellPhase = 'out';
+      any = true;
+    }
+    return any ? SPELL_OUT : 0;
+  }
+
+  clearSpellPaints(): void {
+    for (const fx of this.fx.values()) {
+      fx.spellPhase = 'off';
+      fx.spellT = 0;
+      fx.spellDelay = 0;
+    }
   }
 
   place(col: number, row: number, delay = 0, kind: 'mark' | 'slave' = 'mark'): void {
@@ -332,6 +402,7 @@ export class StoneBoard {
       fx.hover += (fx.wantHover - fx.hover) * hk;
       fx.settleT = Math.max(0, fx.settleT - dt);
       fx.popT += dt / 0.28;
+      this.tickSpell(fx, dt);
       if (!fx.iconOn) continue;
       if (fx.iconDelay > 0) {
         fx.iconDelay -= dt;
@@ -528,6 +599,12 @@ export class StoneBoard {
         iconT: 0,
         iconDelay: 0,
         iconSeed: 0,
+        spellT: 0,
+        spellDelay: 0,
+        spellHold: 0,
+        spellPhase: 'off',
+        spellDirX: 1,
+        spellDirY: 0,
       };
       this.fx.set(key, fx);
     }
@@ -536,7 +613,7 @@ export class StoneBoard {
 
   private isVentNeighbor(cell: Cell): boolean {
     const here = this.fx.get(cellKey(cell.col, cell.row));
-    if (here?.iconOn) return false;
+    if (here?.iconOn || (here && here.spellPhase !== 'off' && here.spellT > 0)) return false;
     for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const next = this.fx.get(cellKey(cell.col + dc, cell.row + dr));
       if (next?.iconOn && next.owner === 'enemy') return true;
@@ -552,8 +629,32 @@ export class StoneBoard {
       fx.hover > 0.02 ||
       fx.popT < 1 ||
       fx.settleT > 0 ||
-      (fx.iconOn && fx.iconT < 1)
+      (fx.iconOn && fx.iconT < 1) ||
+      fx.spellPhase !== 'off'
     );
+  }
+
+  private tickSpell(fx: TileFx, dt: number): void {
+    if (fx.spellPhase === 'off') return;
+    if (fx.spellDelay > 0) {
+      fx.spellDelay -= dt;
+      return;
+    }
+    if (fx.spellPhase === 'in') {
+      fx.spellT += dt / SPELL_IN;
+      if (fx.spellT >= 1) {
+        fx.spellT = 1;
+        fx.spellPhase = 'hold';
+        fx.spellHold = 0;
+      }
+      return;
+    }
+    if (fx.spellPhase === 'hold') return;
+    fx.spellT -= dt / SPELL_OUT;
+    if (fx.spellT <= 0) {
+      fx.spellT = 0;
+      fx.spellPhase = 'off';
+    }
   }
 
   private popScale(t: number): number {
@@ -610,6 +711,7 @@ export class StoneBoard {
       this.drawAttackIcon(g, size, fx);
       this.drawUnitBadge(g, size, fx);
     }
+    this.drawSpellPaint(g, size, fx);
     g.strokeStyle = 'rgba(232, 213, 174, .24)';
     g.lineWidth = 1;
     roundRect(g, 1, 1, size - 2, size - 2, radius);
@@ -621,6 +723,33 @@ export class StoneBoard {
       roundRect(g, 3, 3, size - 6, size - 6, radius * 0.8);
       g.stroke();
     }
+    g.restore();
+  }
+
+  private drawSpellPaint(g: CanvasRenderingContext2D, size: number, fx: TileFx | undefined): void {
+    if (!fx || fx.spellPhase === 'off' || fx.spellDelay > 0 && fx.spellT <= 0) return;
+    const reverse = fx.spellPhase === 'out';
+    const t = reverse ? 1 - fx.spellT : fx.spellT;
+    if (t <= 0 && !reverse) return;
+    const drawT = t <= 0 ? 1 : t;
+    const dx = reverse ? -1 : fx.spellDirX;
+    const dy = reverse ? 0 : fx.spellDirY;
+    const iconSize = size * ICON_FRAC;
+    g.save();
+    g.translate(size / 2, size / 2);
+    g.translate(-iconSize / 2, -iconSize / 2);
+    drawDissolvingIcon(
+      g,
+      this.spellIcon,
+      iconSize,
+      drawT,
+      fx.iconSeed,
+      this.mask,
+      this.maskCtx,
+      this.iconBuf,
+      this.iconBufCtx,
+      { dx, dy, reverse },
+    );
     g.restore();
   }
 
