@@ -252,9 +252,28 @@
   position: absolute;
   inset: 0;
   z-index: 2;
+  overflow: hidden;
+  border-radius: 14px;
   background: url('/assets/ui/card-frame.png') center / 100% 100% no-repeat;
   pointer-events: none;
   filter: saturate(.75);
+}
+.hand-card__frame::after {
+  content: '';
+  position: absolute;
+  inset: -8% -30%;
+  background: linear-gradient(
+    118deg,
+    transparent 40%,
+    rgba(255, 236, 196, 0) 46%,
+    rgba(255, 244, 214, .28) 50%,
+    rgba(255, 236, 196, 0) 54%,
+    transparent 60%
+  );
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  animation: card-frame-sheen 8.4s ease-in-out infinite;
+  animation-delay: var(--card-idle, 0s);
 }
 .hand-card__art {
   position: absolute;
@@ -273,6 +292,9 @@
   object-fit: contain;
   object-position: 50% 46%;
   pointer-events: none;
+  transform-origin: 50% 62%;
+  animation: card-art-breathe 5.6s ease-in-out infinite;
+  animation-delay: var(--card-idle, 0s);
 }
 .hand-card--imp .hand-card__art img { object-fit: contain; object-position: 50% 48%; }
 .hand-card__art::after {
@@ -294,6 +316,8 @@
   color: #f6e7c4;
   font: 700 16px Georgia, serif;
   text-shadow: 0 1px 0 #2a1a10, 0 1px 3px #120806;
+  animation: card-cost-idle 4.8s ease-in-out infinite;
+  animation-delay: calc(var(--card-idle, 0s) - .6s);
 }
 .hand-card__title {
   position: absolute;
@@ -334,6 +358,56 @@
   font-size: 12px;
   line-height: 1.55;
 }
+.hand-card.has-keywords .hand-card__description { bottom: 36px; }
+.hand-card__keywords {
+  position: absolute;
+  z-index: 4;
+  left: 14px;
+  right: 14px;
+  bottom: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+}
+.card-keyword {
+  pointer-events: auto;
+  color: #f0cc6a;
+  font: 700 13px "PingFang SC", "Hiragino Sans GB", serif;
+  letter-spacing: 2px;
+  text-shadow: 0 1px 0 #2a1808, 0 0 8px #c4a66b66;
+  cursor: help;
+  animation: card-keyword-glow 3.8s ease-in-out infinite;
+  animation-delay: calc(var(--card-idle, 0s) - 1.2s);
+}
+.card-keyword--consume { color: #e8a56a; }
+.card-keyword-tip {
+  position: absolute;
+  z-index: 90;
+  width: 248px;
+  padding: 10px 12px 12px;
+  border: 1px solid #c4a66b;
+  border-radius: 6px;
+  background: #1a1410f2;
+  box-shadow: 0 12px 28px #080604cc;
+  color: #e4d7bf;
+  pointer-events: none;
+  text-align: left;
+}
+.card-keyword-tip strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #f0cc6a;
+  font: 700 14px "PingFang SC", serif;
+  letter-spacing: 2px;
+}
+.card-keyword-tip p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e4d7bf;
+}
 .hand-card.is-unaffordable .hand-card__cost { color: #efaa98; filter: saturate(.65); }
 .hand-card.is-unaffordable .hand-card__art { filter: saturate(.55) brightness(.72); }
 .hand-card.is-dragged { cursor: grabbing; }
@@ -344,6 +418,38 @@
 .hand-card.is-dragged { box-shadow: 0 0 0 2px #efdbac, 0 0 20px #e5bb6977, 0 28px 44px #10090b99; }
 .hand-card.is-drop-valid { box-shadow: 0 0 0 2px #e5c989, 0 0 16px #e7c57955, 0 16px 26px #080706aa; }
 .hand-card.is-drop-invalid { box-shadow: 0 0 0 2px #c87363, 0 0 15px #cf655a55, 0 16px 26px #080706aa; }
+.hand-card:nth-child(5n+1) { --card-idle: 0s; }
+.hand-card:nth-child(5n+2) { --card-idle: -1.2s; }
+.hand-card:nth-child(5n+3) { --card-idle: -2.4s; }
+.hand-card:nth-child(5n+4) { --card-idle: -3.5s; }
+.hand-card:nth-child(5n+5) { --card-idle: -4.7s; }
+.hand-card.is-dragged .hand-card__art img,
+.hand-card.is-pressed .hand-card__art img,
+.hand-card.is-dragged .hand-card__frame::after,
+.hand-card.is-pressed .hand-card__frame::after,
+.hand-card.is-dragged .hand-card__cost,
+.hand-card.is-pressed .hand-card__cost,
+.hand-card.is-dragged .card-keyword,
+.hand-card.is-pressed .card-keyword {
+  animation-play-state: paused;
+}
+
+@keyframes card-art-breathe {
+  0%, 100% { translate: 0 0; scale: 1; }
+  50% { translate: 0 -3px; scale: 1.045; }
+}
+@keyframes card-frame-sheen {
+  0%, 62%, 100% { translate: -22% 0; opacity: .12; }
+  78% { translate: 22% 0; opacity: .9; }
+}
+@keyframes card-cost-idle {
+  0%, 100% { rotate: -2deg; filter: brightness(.96); }
+  50% { rotate: 2.2deg; filter: brightness(1.14); }
+}
+@keyframes card-keyword-glow {
+  0%, 100% { text-shadow: 0 1px 0 #2a1808, 0 0 8px #c4a66b66; }
+  50% { text-shadow: 0 1px 0 #2a1808, 0 0 16px #f0cc6aaa; }
+}
 
 .battle-hand-surface {
   position: absolute;
@@ -495,6 +601,167 @@
 .battle-pile-dialog li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #7b684455; }
 .battle-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+.battle-shop {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+  background: linear-gradient(#100e0bb8, #100e0be8 58%);
+}
+.battle-shop[hidden] { display: none; }
+.is-shop .battle-hand,
+.is-shop .battle-hand-surface,
+.is-shop .battle-hand-toggle,
+.is-shop .battle-end,
+.is-shop .battle-energy,
+.is-shop .battle-pile,
+.is-shop .battle-intent,
+.is-shop .battle-guard,
+.is-shop .battle-turn,
+.is-shop .battle-settlement { visibility: hidden; }
+.battle-shop__stage {
+  position: absolute;
+  left: 80px;
+  right: 80px;
+  bottom: 36px;
+  height: 430px;
+  padding: 22px 36px 20px;
+  border: 1px solid #a78b58;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, #3a2f24ee, #1c1814f2 40%, #14110ef5);
+  box-shadow: inset 0 0 0 4px #2a2218, 0 -18px 50px #080706aa;
+}
+.battle-shop__header {
+  position: absolute;
+  left: 36px;
+  top: 18px;
+  text-shadow: 0 2px 8px #100d0c;
+}
+.battle-shop__header p { margin: 0; color: #d4c19a; font-size: 14px; letter-spacing: 1px; }
+.battle-shop__header h1 {
+  margin: 4px 0 6px;
+  font: 700 36px "Songti SC", serif;
+  letter-spacing: 8px;
+}
+.battle-shop__gold {
+  position: absolute;
+  right: 36px;
+  top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;
+  padding: 8px 16px 8px 10px;
+  border: 1px solid #c4a66b;
+  border-radius: 999px;
+  background: #211a14ee;
+}
+.battle-shop__gold img { width: 36px; height: 36px; object-fit: contain; }
+.battle-shop__gold strong { font: 700 28px Georgia, serif; color: #f0cc6a; }
+.battle-shop__gold span { color: #d8cbb4; font-size: 13px; }
+.battle-shop__tray {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 108px;
+  height: 230px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+.shop-slot {
+  position: relative;
+  height: 230px;
+  padding: 0;
+  border: 1px solid #7d6644;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 50% 70%, #2c241c, #15110e);
+  box-shadow: inset 0 0 0 3px #1a1612;
+  overflow: hidden;
+}
+.shop-slot--spell {
+  border-color: #8a6bb0;
+  background: radial-gradient(ellipse at 50% 70%, #2a2233, #141018);
+  box-shadow: inset 0 0 0 3px #1c1524, 0 0 18px #6b4d8a33;
+}
+.shop-slot .hand-card {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  width: 200px;
+  height: 300px;
+  transform: translateX(-50%) scale(0.62);
+  transform-origin: top center;
+  pointer-events: none;
+  box-shadow: 0 10px 18px #080706aa;
+}
+.shop-slot__tag {
+  position: absolute;
+  z-index: 4;
+  left: 10px;
+  top: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #2a2118cc;
+  color: #e6d3a4;
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.shop-slot--spell .shop-slot__tag { background: #3a2658cc; color: #e4c8ff; }
+.shop-slot__price {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  min-width: 46px;
+  padding: 4px 10px;
+  border: 1px solid #c4a66b;
+  border-radius: 999px;
+  background: #211a14;
+  color: #f0cc6a;
+  font: 700 16px Georgia, serif;
+}
+.shop-slot.is-empty {
+  opacity: .55;
+  cursor: default;
+}
+.shop-slot__empty {
+  color: #b7a78a;
+  letter-spacing: 4px;
+}
+.shop-slot.is-unaffordable .shop-slot__price { color: #efaa98; border-color: #c87363; }
+.shop-slot:hover:not(:disabled) { filter: brightness(1.08); }
+.battle-shop__bought {
+  position: absolute;
+  left: 36px;
+  bottom: 22px;
+  margin: 0;
+  color: #d4c19a;
+  font-size: 14px;
+}
+.battle-shop__actions {
+  position: absolute;
+  right: 36px;
+  bottom: 16px;
+  display: flex;
+  gap: 12px;
+}
+.battle-shop__actions button {
+  padding: 12px 26px;
+  border: 1px solid #b3915b;
+  border-radius: 5px;
+  background: #55432d;
+}
+.battle-shop__actions [data-shop="leave"] { background: #6a5130; }
+
 @media (prefers-reduced-motion: reduce) {
   .battle-ui *, .battle-ui *::before, .battle-ui *::after { transition: none !important; }
+  .hand-card__art img,
+  .hand-card__frame::after,
+  .hand-card__cost,
+  .card-keyword {
+    animation: none !important;
+  }
 }

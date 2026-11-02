@@ -3,6 +3,8 @@ export type HitFeel = {
   forcePerDamage: number;
   duration: number;
   frequency: number;
+  showBurst: boolean;
+  crackWound: number;
 };
 
 export type HitFeelSave = HitFeel & {
@@ -15,6 +17,8 @@ export const DEFAULT_HIT_FEEL: HitFeel = {
   forcePerDamage: 0.8,
   duration: 0.45,
   frequency: 6.4,
+  showBurst: false,
+  crackWound: 0,
 };
 
 const STORAGE_KEY = 'roguegame.hit-feel';
@@ -36,7 +40,7 @@ export function shakeAmplitude(feel: HitFeel, damage: number): number {
 }
 
 export function loadHitFeelSave(): HitFeelSave {
-  const fallback: HitFeelSave = { ...DEFAULT_HIT_FEEL, panelX: 1524, panelY: 420 };
+  const fallback: HitFeelSave = { ...DEFAULT_HIT_FEEL, panelX: 780, panelY: 24 };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -46,6 +50,8 @@ export function loadHitFeelSave(): HitFeelSave {
       forcePerDamage: clamp(Number(parsed.forcePerDamage) || DEFAULT_HIT_FEEL.forcePerDamage, 0, 4),
       duration: clamp(Number(parsed.duration) || DEFAULT_HIT_FEEL.duration, 0.12, 1.4),
       frequency: clamp(Number(parsed.frequency) || DEFAULT_HIT_FEEL.frequency, 2, 14),
+      showBurst: parsed.showBurst === true,
+      crackWound: 0,
       panelX: clamp(Number(parsed.panelX) || fallback.panelX, 0, 1920),
       panelY: clamp(Number(parsed.panelY) || fallback.panelY, 0, 1080),
     };

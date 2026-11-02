@@ -1,9 +1,20 @@
-import { Battle, CARD_DEFS, type BattleCard, type BoardSettlement } from '@/game/battle';
+import { Battle, CARD_DEFS, STARTING_DECK, isSpellCard, type BattleCard, type BoardSettlement } from '@/game/battle';
+import type { CardKey } from '@/config/pieces';
 import type { StoneBoard } from '@/render/board';
 import type { FighterCards } from '@/render/fighterCards';
 import { battleLayout, boardCellCenter, boardTarget, isBoardArea } from '@/config/battleLayout';
-import { clientToDesign, computeDesignFit } from '@/config/design';
+import { clientToDesign, computeDesignFit, DESIGN_WIDTH } from '@/config/design';
 import type { BoardSettings } from '@/config/board';
+import { KEYWORDS, isKeywordId, keywordLabels, keywordMarkup } from '@/config/keywords';
+import {
+  REROLL_COST,
+  START_GOLD,
+  WIN_GOLD,
+  buyShopSlot,
+  rerollShop,
+  rollShop,
+  type ShopSlot,
+} from '@/game/shop';
 import './battle.css';
 
 type Pose = { x: number; y: number; angle: number; scale: number };
@@ -19,6 +30,7 @@ type CardNode = {
   press: number; release: number;
   state: 'hand' | 'play' | 'discard'; elapsed: number; delay: number;
   layer: number;
+  spell?: boolean;
 };
 const ART = {
   hero: '/assets/chars/emblem-shield.png?v=2',
@@ -81,6 +93,12 @@ export class BattleView {
   private readonly live = document.createElement('div');
   private readonly result = document.createElement('div');
   private readonly pileDialog = document.createElement('div');
+  private readonly shop = document.createElement('div');
+  private gold = START_GOLD;
+  private runDeck: CardKey[] = [...STARTING_DECK];
+  private shopSlots: ShopSlot[] = [];
+  private bought: string[] = [];
+  private readonly keywordTip = document.createElement('div');
   private readonly nodes = new Map<number, CardNode>();
   /** Exit flights whose card id was drawn again before the animation finished. */
   private readonly departing: CardNode[] = [];
@@ -143,12 +161,29 @@ export class BattleView {
     this.pileDialog.hidden = true;
     this.pileDialog.setAttribute('role', 'dialog');
     this.pileDialog.setAttribute('aria-modal', 'true');
-    this.root.append(this.turn, this.settlement, this.intent, this.guard, this.energy, this.drawPile, this.discardPile, this.end, this.handSurface, this.hand, this.placementTarget, this.handToggle, this.notice, this.live, this.result, this.pileDialog);
+    this.shop.className = 'battle-shop';
+    this.shop.hidden = true;
+    this.shop.setAttribute('role', 'dialog');
+    this.shop.setAttribute('aria-modal', 'true');
+    this.shop.setAttribute('aria-label', '补给商店');
+    this.shop.addEventListener('click', event => this.onShopClick(event));
+    this.keywordTip.className = 'card-keyword-tip';
+    this.keywordTip.hidden = true;
+    this.root.append(this.turn, this.settlement, this.intent, this.guard, this.energy, this.drawPile, this.discardPile, this.end, this.handSurface, this.hand, this.placementTarget, this.handToggle, this.notice, this.live, this.result, this.pileDialog, this.shop, this.keywordTip);
+    this.root.addEventListener('pointerover', event => {
+      const keyword = event.target instanceof Element ? event.target.closest('.card-keyword') : null;
+      if (keyword instanceof HTMLElement) this.showKeywordTip(keyword);
+    });
+    this.root.addEventListener('pointerout', event => {
+      const from = event.target instanceof Element ? event.target.closest('.card-keyword') : null;
+      const into = event.relatedTarget instanceof Element ? event.relatedTarget.closest('.card-keyword') : null;
+      if (from && from !== into) this.hideKeywordTip();
+    });
     document.getElementById('design-root')!.append(this.root);
     this.battle.configureBoard(settings.cols, settings.rows, []);
     this.board.syncUnits(this.battle.units);
     window.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || this.drag || !this.pileDialog.hidden || !this.result.hidden) return;
+      if (event.button !== 0 || this.drag || this.overlayOpen()) return;
       // Canvas clicks are already routed through GameApp; controls retain their actions.
       if (event.target instanceof Element && event.target.closest('canvas, button, input, select, textarea, .inspector, [role="dialog"]')) return;
       const p = this.point(event);
@@ -203,6 +238,32 @@ export class BattleView {
   }
 
   private point(event: PointerEvent) { return clientToDesign(event.clientX, event.clientY, computeDesignFit()); }
+  private overlayOpen(): boolean {
+    return !this.result.hidden || !this.pileDialog.hidden || !this.shop.hidden;
+  }
+  private cardAria(def: (typeof CARD_DEFS)[BattleCard['key']]): string {
+    const tags = keywordLabels(def.keywords);
+    return `${def.title}，${def.cost} 点能量${tags ? `，${tags}` : ''}。${def.description.join(' ')}`;
+  }
+  private showKeywordTip(anchor: HTMLElement): void {
+    const id = anchor.dataset.keyword;
+    if (!this.keywordTip || !isKeywordId(id) || this.drag) return;
+    const keyword = KEYWORDS[id];
+    this.keywordTip.innerHTML = `<strong>${keyword.label}</strong><p>${keyword.hint}</p>`;
+    this.keywordTip.hidden = false;
+    const fit = computeDesignFit();
+    const rect = anchor.getBoundingClientRect();
+    const mid = clientToDesign(rect.left + rect.width / 2, rect.top, fit);
+    const width = 248;
+    const left = Math.max(16, Math.min(DESIGN_WIDTH - width - 16, mid.x - width / 2));
+    this.keywordTip.style.left = `${left}px`;
+    this.keywordTip.style.top = `${Math.max(16, mid.y - 12)}px`;
+    const tipH = this.keywordTip.offsetHeight || 72;
+    this.keywordTip.style.top = `${Math.max(16, mid.y - tipH - 12)}px`;
+  }
+  private hideKeywordTip(): void {
+    if (this.keywordTip) this.keywordTip.hidden = true;
+  }
   private message(text: string): void {
     this.notice.textContent = text;
     this.live.textContent = text;
@@ -251,15 +312,17 @@ export class BattleView {
     const element = document.createElement('button');
     element.className = `hand-card hand-card--${def.tone} hand-card--${card.key}`;
     element.dataset.cardId = String(card.id);
+    element.style.setProperty('--card-idle', `${-((card.id * 1.618) % 6.2).toFixed(2)}s`);
     element.style.pointerEvents = 'none';
-    const placed = def.mines ? '矿工' : def.boardKind === 'imp' ? '小恶魔' : def.boardKind === 'guard' ? '护卫' : def.boardKind === 'energy' ? '雾影' : '攻击单位';
-    element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量，放置${placed}。${def.description.join(' ')}`);
-    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>`;
+    const keywords = keywordMarkup(def.keywords);
+    if (keywords) element.classList.add('has-keywords');
+    element.setAttribute('aria-label', this.cardAria(def));
+    element.innerHTML = `<span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>${keywords ? `<span class="hand-card__keywords">${keywords}</span>` : ''}`;
     element.addEventListener('pointerenter', () => { if (this.expanded && !this.isDealing() && !this.drag && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('focus', () => { if (this.expanded && !this.isDealing() && this.battle.phase === 'player') this.hover = card.id; });
     element.addEventListener('blur', () => { if (!this.drag && this.hover === card.id) this.hover = null; });
     element.addEventListener('pointerdown', event => {
-      if (!this.expanded || this.revealBeforeDiscard > 0 || event.button !== 0 || this.battle.phase !== 'player' || !this.pileDialog.hidden) return;
+      if (!this.expanded || this.revealBeforeDiscard > 0 || event.button !== 0 || this.battle.phase !== 'player' || this.overlayOpen()) return;
       if (this.battle.energy < def.cost) {
         event.preventDefault();
         event.stopPropagation();
@@ -270,6 +333,7 @@ export class BattleView {
       event.stopPropagation();
       const p = this.point(event);
       this.drag = { id: card.id, pointer: event.pointerId, x: p.x, y: p.y, startX: p.x, startY: p.y, moved: false, condensed: false };
+      this.hideKeywordTip();
       this.selected = this.hover = card.id;
       element.setPointerCapture(event.pointerId);
       this.root.classList.add('is-dragging');
@@ -310,7 +374,7 @@ export class BattleView {
       node.element.classList.toggle('is-unaffordable', unavailable);
       node.element.setAttribute('aria-disabled', String(b.phase !== 'player' || unavailable));
       node.element.title = unavailable ? `能量不足，需要 ${def.cost} 点能量` : '';
-      node.element.setAttribute('aria-label', `${def.title}，${def.cost} 点能量。${def.description.join(' ')}${unavailable ? `能量不足，需要 ${def.cost} 点能量。` : ''}`);
+      node.element.setAttribute('aria-label', `${this.cardAria(def)}${unavailable ? `能量不足，需要 ${def.cost} 点能量。` : ''}`);
       node.element.tabIndex = this.expanded && b.phase === 'player' && node.state === 'hand' ? 0 : -1;
     }
     this.setExpanded(this.expanded);
@@ -325,7 +389,7 @@ export class BattleView {
     this.intent.innerHTML = `<span>来袭伤害</span><strong>${b.intent + boardThreat}</strong>${boardThreat ? `<small>本体 ${b.intent} · 棋盘 +${boardThreat}</small>` : '<small>敌方意图</small>'}`;
     this.intent.hidden = b.phase === 'won' || b.phase === 'lost';
     this.syncGuardHud();
-    if ((b.phase === 'won' || b.phase === 'lost') && !this.settlementCues.length && !this.combatAnimating) this.resultTimer = 0.65;
+    if ((b.phase === 'won' || b.phase === 'lost') && !this.settlementCues.length && !this.combatAnimating && this.shop.hidden && this.result.hidden) this.resultTimer = 0.65;
   }
 
   private syncEnergyHud(): void {
@@ -351,8 +415,11 @@ export class BattleView {
   }
 
   private canDrop(id: number, x: number, y: number): boolean {
+    const node = this.nodes.get(id);
     const target = boardTarget(this.settings, x, y);
-    return this.nodes.has(id) && target !== null && !this.board.hasPiece(target.col, target.row);
+    if (!node || !target) return false;
+    if (isSpellCard(node.card.key)) return true;
+    return !this.board.hasPiece(target.col, target.row);
   }
   private previewTarget(x: number, y: number): void {
     this.target = boardTarget(this.settings, x, y);
@@ -364,10 +431,13 @@ export class BattleView {
     this.placementTarget.style.top = `${target.y}px`;
     this.placementTarget.style.width = `${target.size}px`;
     this.placementTarget.style.height = `${target.size}px`;
+    const id = this.drag?.id ?? this.selected;
+    const spell = id !== null && this.nodes.has(id) && isSpellCard(this.nodes.get(id)!.card.key);
     const occupied = this.board.hasPiece(target.col, target.row);
-    this.placementTarget.classList.toggle('is-invalid', occupied);
-    this.placementTarget.classList.toggle('is-valid', !occupied);
-    this.placementTarget.textContent = occupied ? '已占用' : '';
+    const invalid = occupied && !spell;
+    this.placementTarget.classList.toggle('is-invalid', invalid);
+    this.placementTarget.classList.toggle('is-valid', !invalid);
+    this.placementTarget.textContent = invalid ? '已占用' : spell ? '施放' : '';
   }
 
   private syncMinePreview(): void {
@@ -388,7 +458,7 @@ export class BattleView {
     if (this.selected !== null && !this.drag) this.previewTarget(p.x, p.y);
     this.syncDropHighlight();
     if (!this.drag) {
-      if (!this.expanded || this.isDealing() || this.battle.phase !== 'player' || !this.pileDialog.hidden || !this.result.hidden) {
+      if (!this.expanded || this.isDealing() || this.battle.phase !== 'player' || this.overlayOpen()) {
         if (this.isDealing()) this.hover = null;
         return;
       }
@@ -474,6 +544,7 @@ export class BattleView {
   private cancel(collapseHand = true): void {
     const drag = this.drag;
     this.drag = null;
+    this.hideKeywordTip();
     if (drag) {
       const element = this.nodes.get(drag.id)?.element;
       if (element?.hasPointerCapture(drag.pointer)) element.releasePointerCapture(drag.pointer);
@@ -490,7 +561,7 @@ export class BattleView {
 
   /** Placement consumes the click before the board handles ordinary hover feedback. */
   targetClick(x: number, y: number): boolean {
-    if (x < 0 || x > 1920 || y < 0 || y > 1080 || !this.pileDialog.hidden || !this.result.hidden) return false;
+    if (x < 0 || x > 1920 || y < 0 || y > 1080 || this.overlayOpen()) return false;
     if (this.placementAnimating || this.revealBeforeDiscard > 0) return true;
     if (!isBoardArea(this.settings, x, y)) {
       this.toggleHand();
@@ -505,7 +576,8 @@ export class BattleView {
     const node = this.nodes.get(id);
     if (!node || node.state !== 'hand') return;
     const target = boardTarget(this.settings, x, y);
-    if (!target || this.board.hasPiece(target.col, target.row)) {
+    const spell = isSpellCard(node.card.key);
+    if (!target || (!spell && this.board.hasPiece(target.col, target.row))) {
       this.rejectPlacement(id, '请放入空格，已占用的格子不能重复放置');
       return;
     }
@@ -518,9 +590,9 @@ export class BattleView {
     }
     // Clear the pending target without tucking the rest of the hand.
     this.cancel(false);
-    // Reserve the cell immediately; reveal it exactly when the card lands.
-    this.board.syncUnits(this.battle.units, this.reduced.matches ? 0 : PLAY_FLIGHT);
+    if (!result.spell) this.board.syncUnits(this.battle.units, this.reduced.matches ? 0 : PLAY_FLIGHT);
     node.origin = { ...node.pose };
+    node.spell = Boolean(result.spell);
     node.element.classList.add('is-playing');
     node.destination = {
       x: target.x + target.size / 2,
@@ -536,11 +608,14 @@ export class BattleView {
     this.handToggle.disabled = true;
     node.element.style.pointerEvents = 'none';
     node.element.setAttribute('aria-hidden', 'true');
-    this.message(`${result.message}：已放入第 ${target.row + 1} 行、第 ${target.col + 1} 列`);
+    this.message(result.spell
+      ? `${result.message}：立刻生效`
+      : `${result.message}：已放入第 ${target.row + 1} 行、第 ${target.col + 1} 列`);
     this.sync();
   }
   private endTurn(): void {
-    if (this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing() || !this.pileDialog.hidden || !this.result.hidden || this.battle.phase !== 'player' || this.turnCue !== 'none') return;
+    if (this.placementAnimating || this.revealBeforeDiscard > 0 || this.isDealing() || this.overlayOpen() || this.battle.phase !== 'player' || this.turnCue !== 'none') return;
+    this.fighters.primeAudio();
     this.cancel(false);
     const leaving = [...this.nodes.values()].filter(node => node.state === 'hand');
     if (!this.expanded && leaving.length && !this.reduced.matches) {
@@ -700,7 +775,7 @@ export class BattleView {
       this.syncTurnHud();
       if (settlement.victory) {
         this.resultTimer = 0.26;
-        this.live.textContent = `造成 ${settlement.damage} 点伤害，击败缝偶`;
+        this.live.textContent = `造成 ${settlement.damage} 点伤害，击败老者`;
       } else {
         this.turnCue = 'enemy-strike';
         this.turnPause = Math.max(this.turnPause, 0.16);
@@ -720,7 +795,7 @@ export class BattleView {
           this.settlementDisplay.foeHp = this.battle.foeHp;
           this.fighters.setSettlementPreview({ ...this.settlementDisplay });
         }
-        this.live.textContent = `夜羽击中缝偶，造成 ${settlement.damage} 点伤害`;
+        this.live.textContent = `德鲁伊击中老者，造成 ${settlement.damage} 点伤害`;
       },
       onComplete: complete,
     });
@@ -808,7 +883,7 @@ export class BattleView {
       const layout = battleLayout(this.settings);
       if (hit.damage > 0) {
         this.float(`-${hit.damage}`, layout.heroX, layout.heroBottom - 72);
-        this.message(`缝偶造成 ${hit.damage} 点伤害`);
+        this.message(`老者造成 ${hit.damage} 点伤害`);
       } else {
         this.float(`格挡 ${hit.blocked}`, layout.heroX, layout.heroBottom - 72, 'block');
         this.message('护甲挡住了全部伤害');
@@ -847,42 +922,139 @@ export class BattleView {
 
   private showResult(): void {
     this.pileDialog.hidden = true;
+    if (this.battle.phase === 'won') {
+      this.openShop();
+      return;
+    }
     this.result.hidden = false;
-    const won = this.battle.phase === 'won';
-    this.result.innerHTML = `<div class="battle-result__panel"><span>战斗结束</span><h1>${won ? '胜利' : '落幕'}</h1><p>${won ? '缝偶已被击败。' : '夜羽倒下了，再试一次。'}</p><p>经过 ${this.battle.turn} 回合 · 剩余生命 ${this.battle.heroHp} / ${this.battle.heroMaxHp}</p><button>再战一场</button></div>`;
+    this.result.innerHTML = `<div class="battle-result__panel"><span>战斗结束</span><h1>落幕</h1><p>夜羽倒下了，再试一次。</p><p>经过 ${this.battle.turn} 回合 · 剩余生命 ${this.battle.heroHp} / ${this.battle.heroMaxHp}</p><button>再战一场</button></div>`;
     const restart = this.result.querySelector('button')!;
-    restart.addEventListener('click', () => {
-      this.cancel(false);
-      for (const node of this.nodes.values()) this.removeVisual(node);
-      for (const node of this.departing) this.removeVisual(node);
-      this.nodes.clear();
-      this.departing.length = 0;
-      this.settlementCues = [];
-      this.settlementElapsed = this.settlementHold = 0;
-      for (const score of this.root.querySelectorAll('.battle-score')) {
-        for (const animation of score.getAnimations({ subtree: true })) animation.cancel();
-        score.remove();
-      }
-      this.fighters.cancelStrike();
-      this.combatAnimating = false;
-      this.fighters.setSettlementPreview(null);
-      this.settlementDisplay = null;
-      this.settlement.classList.remove('is-visible', 'is-scoring');
-      this.resultTimer = 0;
-      this.revealBeforeDiscard = 0;
-      this.turnPause = 0;
-      this.turnCue = 'none';
-      this.battle.reset();
-      this.result.hidden = true;
-      this.setExpanded(true);
-      this.sync();
-      this.message('新的战斗开始');
-      this.end.focus();
-    });
+    restart.addEventListener('click', () => this.restartRun());
     restart.focus();
   }
+
+  private clearCombatVisuals(): void {
+    this.cancel(false);
+    for (const node of this.nodes.values()) this.removeVisual(node);
+    for (const node of this.departing) this.removeVisual(node);
+    this.nodes.clear();
+    this.departing.length = 0;
+    this.settlementCues = [];
+    this.settlementElapsed = this.settlementHold = 0;
+    for (const score of this.root.querySelectorAll('.battle-score')) {
+      for (const animation of score.getAnimations({ subtree: true })) animation.cancel();
+      score.remove();
+    }
+    this.fighters.cancelStrike();
+    this.combatAnimating = false;
+    this.fighters.setSettlementPreview(null);
+    this.settlementDisplay = null;
+    this.settlement.classList.remove('is-visible', 'is-scoring');
+    this.resultTimer = 0;
+    this.revealBeforeDiscard = 0;
+    this.turnPause = 0;
+    this.turnCue = 'none';
+    this.board.syncUnits([]);
+  }
+
+  private restartRun(): void {
+    this.gold = START_GOLD;
+    this.runDeck = [...STARTING_DECK];
+    this.bought = [];
+    this.shopSlots = [];
+    this.shop.hidden = true;
+    this.root.classList.remove('is-shop');
+    this.result.hidden = true;
+    this.clearCombatVisuals();
+    this.battle.reset(this.runDeck, true);
+    this.setExpanded(true);
+    this.sync();
+    this.message('新的战斗开始');
+    this.end.focus();
+  }
+
+  private openShop(): void {
+    if (!this.shop.hidden) return;
+    this.hideKeywordTip();
+    this.result.hidden = true;
+    this.resultTimer = 0;
+    this.gold += WIN_GOLD;
+    this.bought = [];
+    this.shopSlots = rollShop();
+    this.shop.hidden = false;
+    this.root.classList.add('is-shop');
+    this.renderShop();
+    this.message('进入补给商店');
+    this.shop.querySelector<HTMLButtonElement>('[data-shop="leave"]')?.focus();
+  }
+
+  private shopCardHtml(key: CardKey, index: number): string {
+    const def = CARD_DEFS[key];
+    const keywords = keywordMarkup(def.keywords);
+    const idle = `${-(index * 1.15 % 6.2).toFixed(2)}s`;
+    return `<span class="hand-card hand-card--${def.tone} hand-card--${key}${keywords ? ' has-keywords' : ''}" style="--card-idle:${idle}"><span class="hand-card__art"><img src="${ART[def.art]}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>${keywords ? `<span class="hand-card__keywords">${keywords}</span>` : ''}</span>`;
+  }
+
+  private renderShop(): void {
+    const slots = this.shopSlots.map((slot, index) => {
+      const spell = index === this.shopSlots.length - 1;
+      if (!slot) {
+        return `<button class="shop-slot${spell ? ' shop-slot--spell' : ''} is-empty" disabled data-index="${index}"><span class="shop-slot__empty">已售出</span>${spell ? '<span class="shop-slot__tag">法术</span>' : ''}</button>`;
+      }
+      const def = CARD_DEFS[slot.key];
+      const unaffordable = this.gold < slot.price;
+      return `<button class="shop-slot${slot.kind === 'spell' ? ' shop-slot--spell' : ''}${unaffordable ? ' is-unaffordable' : ''}" data-index="${index}" aria-label="花费 ${slot.price} 金购买${def.title}"><span class="shop-slot__tag">${slot.kind === 'spell' ? '法术' : '棋子'}</span>${this.shopCardHtml(slot.key, index)}<span class="shop-slot__price">${slot.price}</span></button>`;
+    }).join('');
+    const bought = this.bought.length ? this.bought.join('、') : '还没有买东西';
+    this.shop.innerHTML = `<div class="battle-shop__stage"><header class="battle-shop__header"><p>胜利 · 补给</p><h1>商店</h1><p>前四格是棋子，最后一格永远是法术。</p></header><div class="battle-shop__gold" aria-label="金币 ${this.gold}"><img src="/assets/chars/emblem-bag.png?v=2" alt=""><strong>${this.gold}</strong><span>金币</span></div><div class="battle-shop__tray">${slots}</div><p class="battle-shop__bought">已购：${bought}</p><div class="battle-shop__actions"><button type="button" data-shop="reroll">刷新 · ${REROLL_COST}</button><button type="button" data-shop="leave">出发</button></div></div>`;
+  }
+
+  private onShopClick(event: Event): void {
+    const button = event.target instanceof Element ? event.target.closest('button') : null;
+    if (!button) return;
+    const action = button.dataset.shop;
+    if (action === 'leave') {
+      this.leaveShop();
+      return;
+    }
+    if (action === 'reroll') {
+      const result = rerollShop(this.shopSlots, this.gold);
+      if (!result.ok) {
+        this.message(result.message);
+        return;
+      }
+      this.gold = result.gold;
+      this.shopSlots = result.slots;
+      this.renderShop();
+      this.message(result.message);
+      return;
+    }
+    const index = Number(button.dataset.index);
+    if (!Number.isInteger(index)) return;
+    const result = buyShopSlot(this.shopSlots, index, this.gold);
+    if (!result.ok || !result.offer) {
+      this.message(result.message);
+      return;
+    }
+    this.gold = result.gold;
+    this.runDeck.push(result.offer.key);
+    this.bought.push(CARD_DEFS[result.offer.key].title);
+    this.renderShop();
+    this.message(`买下 ${CARD_DEFS[result.offer.key].title}`);
+  }
+
+  private leaveShop(): void {
+    this.shop.hidden = true;
+    this.root.classList.remove('is-shop');
+    this.clearCombatVisuals();
+    this.battle.reset(this.runDeck, false);
+    this.setExpanded(true);
+    this.sync();
+    this.message('带着新货出发');
+    this.end.focus();
+  }
   private showPile(kind: 'draw' | 'discard'): void {
-    if (this.revealBeforeDiscard > 0) return;
+    if (this.revealBeforeDiscard > 0 || !this.shop.hidden) return;
     this.cancel();
     const pile = kind === 'draw' ? this.battle.drawPile : this.battle.discardPile;
     const counts = new Map<string, number>();
@@ -896,11 +1068,12 @@ export class BattleView {
   }
   private keyDown(event: KeyboardEvent): void {
     if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, .inspector')) return;
-    if (!this.result.hidden || !this.pileDialog.hidden) {
+    if (this.overlayOpen()) {
       if (event.key === 'Escape' && !this.pileDialog.hidden) { this.pileDialog.hidden = true; this.drawPile.focus(); }
       if (event.key === 'Tab') {
         event.preventDefault();
-        (!this.result.hidden ? this.result : this.pileDialog).querySelector('button')?.focus();
+        const host = !this.shop.hidden ? this.shop : !this.result.hidden ? this.result : this.pileDialog;
+        host.querySelector('button')?.focus();
       }
       return;
     }
@@ -996,8 +1169,9 @@ export class BattleView {
       const dragging = this.drag?.id === id && this.drag.moved;
       const overCell = dragging && this.drag!.condensed && this.target !== null;
       const occupied = overCell && this.board.hasPiece(this.target!.col, this.target!.row);
-      node.element.classList.toggle('is-drop-valid', !!overCell && !occupied);
-      node.element.classList.toggle('is-drop-invalid', !!overCell && !!occupied);
+      const spellHold = dragging && isSpellCard(node.card.key);
+      node.element.classList.toggle('is-drop-valid', !!overCell && (!occupied || spellHold));
+      node.element.classList.toggle('is-drop-invalid', !!overCell && !!occupied && !spellHold);
       if (dragging) target = {
         x: this.drag!.x,
         y: this.drag!.y - 55,
@@ -1027,7 +1201,7 @@ export class BattleView {
           scale: mix(origin.scale, destination.scale, u),
         };
         if (travel >= 1 && !node.landed) {
-          this.board.revealPlacedPiece(destination.col, destination.row);
+          if (!node.spell) this.board.revealPlacedPiece(destination.col, destination.row);
           node.landed = true;
         }
         node.element.style.opacity = String(1 - fold);

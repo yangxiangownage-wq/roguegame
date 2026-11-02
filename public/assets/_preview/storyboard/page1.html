@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>第一页 · 开桌</title>
+  <style>
+    @font-face {
+      font-family: Pixelify;
+      src: url("../../fonts/pixelify-sans.ttf") format("truetype");
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #1a0e12;
+      color: #f4e6c9;
+      font-family: Georgia, "Noto Serif SC", serif;
+    }
+    .page {
+      width: 1920px;
+      height: 1080px;
+      padding: 36px 48px 28px;
+      background:
+        radial-gradient(ellipse at 50% 40%, rgba(90, 24, 28, 0.35), transparent 60%),
+        #1a0e12 url("../../bg.jpg") center / cover;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 18px;
+    }
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 0 8px 4px;
+      border-bottom: 1px solid rgba(196, 166, 107, 0.45);
+    }
+    header h1 {
+      font-size: 28px;
+      letter-spacing: 0.28em;
+      font-weight: 600;
+      color: #e8d5a3;
+    }
+    header span {
+      font-size: 16px;
+      letter-spacing: 0.18em;
+      color: #c4a66b;
+      opacity: 0.85;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 22px 28px;
+      min-height: 0;
+    }
+    .panel {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+    }
+    .frame {
+      position: relative;
+      min-height: 0;
+      border: 3px solid #c4a66b;
+      box-shadow:
+        inset 0 0 0 2px #7a5a2a,
+        0 0 0 1px #3a2410,
+        0 10px 28px rgba(0, 0, 0, 0.45);
+      background: #12080a;
+      overflow: hidden;
+    }
+    .frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      display: block;
+      background: #12080a;
+    }
+    .seal {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #d4b56a, #8a5a18 70%);
+      color: #2a1608;
+      font: 700 16px Georgia, serif;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+    figcaption {
+      margin-top: 8px;
+      padding: 0 6px;
+      display: grid;
+      gap: 2px;
+    }
+    figcaption .beat {
+      font-size: 13px;
+      letter-spacing: 0.32em;
+      color: #c4a66b;
+      text-transform: none;
+    }
+    figcaption p {
+      font-size: 20px;
+      line-height: 1.35;
+      color: #f4e6c9;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>第一页 · 开桌</h1>
+      <span>开机连环画草稿 · 四格</span>
+    </header>
+    <main class="grid">
+      <figure class="panel">
+        <div class="frame">
+          <span class="seal">1</span>
+          <img src="p1-open.png" alt="幕启，空桌" />
+        </div>
+        <figcaption>
+          <div class="beat">幕启</div>
+          <p>夜戏开张。中间那张桌子还空着。</p>
+        </figcaption>
+      </figure>
+      <figure class="panel">
+        <div class="frame">
+          <span class="seal">2</span>
+          <img src="p2-nightfeather.png" alt="夜羽入座" />
+        </div>
+        <figcaption>
+          <div class="beat">左座</div>
+          <p>夜羽坐下。帽子上的骷髅对着空位。</p>
+        </figcaption>
+      </figure>
+      <figure class="panel">
+        <div class="frame">
+          <span class="seal">3</span>
+          <img src="p3-sewn.png" alt="缝偶对坐" />
+        </div>
+        <figcaption>
+          <div class="beat">右座</div>
+          <p>缝偶一直坐在对面。叉眼没有眨眼。</p>
+        </figcaption>
+      </figure>
+      <figure class="panel">
+        <div class="frame">
+          <span class="seal">4</span>
+          <img src="p4-board.png" alt="空棋盘亮起" />
+        </div>
+        <figcaption>
+          <div class="beat">棋盘</div>
+          <p>格子亮了。牌放下就留下。回合结束，左边打右边。</p>
+        </figcaption>
+      </figure>
+    </main>
+  </div>
+</body>
+</html>

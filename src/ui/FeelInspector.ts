@@ -12,9 +12,9 @@ import {
   computeDesignFit,
 } from '@/config/design';
 
-type FieldKey = 'force' | 'forcePerDamage' | 'duration' | 'frequency' | 'previewDamage';
+type SliderKey = 'force' | 'forcePerDamage' | 'duration' | 'frequency';
 
-const FIELDS: { key: FieldKey; label: string; min: number; max: number; step: number }[] = [
+const FIELDS: { key: SliderKey; label: string; min: number; max: number; step: number }[] = [
   { key: 'force', label: '力度', min: 2, max: 36, step: 0.5 },
   { key: 'forcePerDamage', label: '每伤加成', min: 0, max: 4, step: 0.1 },
   { key: 'duration', label: '时间 秒', min: 0.12, max: 1.4, step: 0.01 },
@@ -40,8 +40,12 @@ export function mountFeelInspector(
   fighters: FighterCards,
 ): void {
   root.replaceChildren();
-  root.classList.add('inspector');
-  placePanel(root, save.panelX, save.panelY);
+  root.classList.add('inspector', 'is-open');
+  const panelX = save.panelX >= 1400 ? 780 : save.panelX;
+  const panelY = save.panelY >= 360 && save.panelX >= 1400 ? 24 : save.panelY;
+  save.panelX = panelX;
+  save.panelY = panelY;
+  placePanel(root, panelX, panelY);
 
   let previewDamage = 4;
   let savedSnap = JSON.stringify({ ...feel, panelX: save.panelX, panelY: save.panelY });
@@ -81,11 +85,11 @@ export function mountFeelInspector(
 
   const hint = document.createElement('p');
   hint.className = 'inspector-hint';
-  hint.textContent = '拖滑条立刻生效。试震动只晃镜头，试打击走完整对撞。';
+  hint.textContent = '试打击：音效应钉在两框相撞那一帧。';
   root.append(hint);
 
   const refreshers: Array<() => void> = [];
-  const addField = (field: { key: FieldKey; label: string; min: number; max: number; step: number }, read: () => number, write: (n: number) => void) => {
+  const addField = (field: { key: string; label: string; min: number; max: number; step: number }, read: () => number, write: (n: number) => void) => {
     const row = document.createElement('div');
     row.className = 'inspector-row';
     const label = document.createElement('span');
@@ -131,6 +135,24 @@ export function mountFeelInspector(
     (n) => { previewDamage = Math.round(n); },
   );
 
+  const burstRow = document.createElement('label');
+  burstRow.className = 'inspector-check';
+  const burstBox = document.createElement('input');
+  burstBox.type = 'checkbox';
+  burstBox.checked = feel.showBurst;
+  const burstText = document.createElement('span');
+  burstText.textContent = '旧粒子（星/环/尘/烟）';
+  burstBox.addEventListener('change', () => {
+    feel.showBurst = burstBox.checked;
+    if (!feel.showBurst) fighters.clearBurst();
+    markDirty();
+  });
+  refreshers.push(() => {
+    burstBox.checked = feel.showBurst;
+  });
+  burstRow.append(burstBox, burstText);
+  root.append(burstRow);
+
   const actions = document.createElement('div');
   actions.className = 'inspector-actions';
   const shakeBtn = document.createElement('button');
@@ -140,13 +162,18 @@ export function mountFeelInspector(
   const strikeBtn = document.createElement('button');
   strikeBtn.type = 'button';
   strikeBtn.textContent = '试打击';
-  strikeBtn.addEventListener('click', () => fighters.previewStrike(previewDamage));
+  strikeBtn.addEventListener('click', () => {
+    fighters.primeAudio();
+    fighters.previewStrike(previewDamage);
+  });
   const resetBtn = document.createElement('button');
   resetBtn.type = 'button';
   resetBtn.textContent = '恢复默认';
   resetBtn.addEventListener('click', () => {
     Object.assign(feel, DEFAULT_HIT_FEEL);
     previewDamage = 4;
+    fighters.clearBurst();
+    fighters.refreshCards();
     for (const refresh of refreshers) refresh();
     markDirty();
   });

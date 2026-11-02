@@ -17,6 +17,12 @@
 .card-editor-preview .hand-card {
   position: relative;
 }
+.card-editor-preview .hand-card__art img,
+.card-editor-preview .hand-card__frame::after,
+.card-editor-preview .hand-card__cost,
+.card-editor-preview .card-keyword {
+  animation: none;
+}
 
 .card-editor-preview .hand-card__art,
 .card-editor-preview .hand-card__frame {
@@ -84,6 +90,19 @@
   right: calc(16px - var(--nudge-x, 0px));
   bottom: 16px;
   font-size: 12px;
+}
+
+.card-editor-preview .hand-card.has-keywords .hand-card__description {
+  bottom: 36px;
+}
+
+.card-editor-preview .hand-card__keywords {
+  pointer-events: none;
+}
+
+.card-editor-preview .card-keyword {
+  pointer-events: auto;
+  cursor: help;
 }
 
 .card-editor-preview .hand-card--consume .hand-card__kind {

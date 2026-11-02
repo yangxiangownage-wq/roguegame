@@ -203,15 +203,13 @@ export function sliceSheet(img: HTMLImageElement, cols: number, rows: number): S
 export function drawImpactBurst(
   g: CanvasRenderingContext2D,
   burst: ImpactBurst,
-  sprites: { shards?: HTMLImageElement; dust?: HTMLImageElement; crack?: HTMLImageElement; star?: HTMLImageElement },
-  cells: SpriteCell[],
+  sprites: { dust?: HTMLImageElement; star?: HTMLImageElement },
 ): void {
   const { x, y, age, damage } = burst;
   drawShockwave(g, x, y, Math.max(0, age - 0.02), damage);
   drawDust(g, burst, sprites.dust);
   drawSmoke(g, burst);
   drawStar(g, x, y, age, damage, sprites.star);
-  drawShards(g, burst, sprites.shards, cells);
   drawSparks(g, burst);
 }
 
@@ -336,31 +334,6 @@ function drawSparks(g: CanvasRenderingContext2D, burst: ImpactBurst): void {
     g.stroke();
   }
   g.restore();
-}
-
-function drawShards(
-  g: CanvasRenderingContext2D,
-  burst: ImpactBurst,
-  img: HTMLImageElement | undefined,
-  cells: SpriteCell[],
-): void {
-  for (const p of burst.shards) {
-    const u = particleLife(p);
-    if (u === null) continue;
-    g.save();
-    g.globalAlpha = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45;
-    g.translate(p.x, p.y);
-    g.rotate(p.rot);
-    const s = p.size;
-    if (img?.naturalWidth && cells.length) {
-      const cell = cells[p.cell % cells.length]!;
-      g.drawImage(img, cell.sx, cell.sy, cell.sw, cell.sh, -s / 2, -s / 2, s, s);
-    } else {
-      g.fillStyle = u < 0.5 ? '#e0c48a' : '#6a4a28';
-      g.fillRect(-s * 0.35, -s * 0.22, s * 0.7, s * 0.44);
-    }
-    g.restore();
-  }
 }
 
 function drawDust(g: CanvasRenderingContext2D, burst: ImpactBurst, img: HTMLImageElement | undefined): void {

@@ -1,4 +1,5 @@
 import { CHAR_ART } from 'virtual:char-art';
+import type { KeywordId } from '@/config/keywords';
 
 export type PersistKind = 'permanent' | 'consume';
 export type CardSchool = 'none' | 'demon';
@@ -68,6 +69,7 @@ const CHAR_LABELS: Record<string, string> = {
   imp: '小恶魔',
   druid: '德鲁伊',
   'druid-token': '德鲁伊地块',
+  elder: '老者',
   antlers: '鹿角',
   'iron-shield': '铁木盾',
   'coin-bag': '钱袋',
@@ -135,6 +137,10 @@ function uid(): string {
 
 export function persistLabel(kind: PersistKind): string {
   return kind === 'consume' ? '消耗' : '永久';
+}
+
+export function cardKeywords(card: CatalogCard): KeywordId[] {
+  return [card.persist];
 }
 
 export function isCardSchool(value: unknown): value is CardSchool {

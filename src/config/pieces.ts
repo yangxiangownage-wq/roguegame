@@ -9,7 +9,7 @@ export const PIECE_ART = {
   imp: '/assets/tiles/face-unit.png?v=2',
 } as const;
 export type PieceKind = keyof typeof PIECE_ART;
-export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave' | 'imp';
+export type CardKey = 'blade' | 'leap' | 'slash' | 'mist' | 'hook' | 'slave' | 'imp' | 'ember' | 'hymn' | 'lamp';
 export const STANDING_PIECES: ReadonlySet<PieceKind> = new Set();
 export type BoardUnit = {
   id: number;

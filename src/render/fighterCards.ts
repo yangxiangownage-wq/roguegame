@@ -8,9 +8,7 @@ import {
   type HitFeel,
 } from '@/config/hitFeel';
 import {
-  drawDecal,
   drawImpactBurst,
-  sliceSheet,
   spawnImpact,
   updateImpact,
   type ImpactBurst,
@@ -26,11 +24,12 @@ type StrikeRequest = {
   onImpact: () => void;
   onComplete: () => void;
 };
-type Strike = StrikeRequest & { elapsed: number; impacted: boolean; fxSpawned: boolean };
+type Strike = StrikeRequest & { elapsed: number; impacted: boolean; fxSpawned: boolean; sounded: boolean };
 type FighterPose = { x: number; y: number; angle: number; sx: number; sy: number };
 const STRIKE = { windup: 0.09, impact: 0.24, compress: 0.018, release: 0.3, end: 0.69 };
 const REDUCED_STRIKE = { impact: 0.04, end: 0.34 };
 let hitAudio: AudioContext | null = null;
+let hitSources: AudioScheduledSourceNode[] = [];
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -68,8 +67,8 @@ const FIGHTERS: FighterDef[] = [
     inner: '#2a241c',
   },
   {
-    src: '/assets/chars/druid.png?v=1',
-    name: '德鲁伊',
+    src: '/assets/chars/elder.png?v=1',
+    name: '老者',
     atk: 8,
     hp: 5,
     maxHp: 20,
@@ -77,33 +76,63 @@ const FIGHTERS: FighterDef[] = [
   },
 ];
 
-function playHitSound(damage: number): void {
+function stopHitSound(): void {
+  for (const src of hitSources) {
+    try { src.stop(); } catch { /* already finished */ }
+  }
+  hitSources = [];
+}
+
+function ensureHitAudio(): AudioContext | null {
   try {
-    hitAudio ??= new AudioContext();
-    const ctx = hitAudio;
-    if (ctx.state === 'suspended') void ctx.resume();
-    const now = ctx.currentTime;
+    hitAudio ??= new AudioContext({ latencyHint: 'interactive' });
+    if (hitAudio.state === 'suspended') void hitAudio.resume();
+    return hitAudio;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * How far before the contact frame to start the graph so the speaker peak
+ * lands on the slam. Windows/Chrome often reports 0 and then buffers 80–160ms.
+ */
+function hitAudioLead(ctx: AudioContext): number {
+  const output = typeof ctx.outputLatency === 'number' ? ctx.outputLatency : 0;
+  const base = typeof ctx.baseLatency === 'number' ? ctx.baseLatency : 0;
+  const reported = output > 0.01 ? output : base;
+  const lead = reported > 0.01 ? reported + 0.04 : 0.14;
+  return Math.min(0.22, Math.max(0.12, lead));
+}
+
+function playHitSound(damage: number): boolean {
+  try {
+    const ctx = ensureHitAudio();
+    if (!ctx) return false;
+    const t0 = ctx.currentTime;
     const thump = ctx.createOscillator();
     const thumpGain = ctx.createGain();
     thump.type = 'sine';
-    thump.frequency.setValueAtTime(90 + damage * 6, now);
-    thump.frequency.exponentialRampToValueAtTime(42, now + 0.12);
-    thumpGain.gain.setValueAtTime(0.0001, now);
-    thumpGain.gain.exponentialRampToValueAtTime(0.32 + damage * 0.03, now + 0.01);
-    thumpGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    thump.frequency.setValueAtTime(90 + damage * 6, t0);
+    thump.frequency.exponentialRampToValueAtTime(42, t0 + 0.12);
+    const thumpPeak = 0.32 + damage * 0.03;
+    thumpGain.gain.setValueAtTime(thumpPeak, t0);
+    thumpGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
     thump.connect(thumpGain).connect(ctx.destination);
-    thump.start(now);
-    thump.stop(now + 0.2);
+    thump.start(t0);
+    thump.stop(t0 + 0.18);
 
     const click = ctx.createOscillator();
     const clickGain = ctx.createGain();
     click.type = 'triangle';
-    click.frequency.setValueAtTime(420 + damage * 40, now);
-    clickGain.gain.setValueAtTime(0.1, now);
-    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
+    click.frequency.setValueAtTime(420 + damage * 40, t0);
+    clickGain.gain.setValueAtTime(0.12, t0);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.04);
     click.connect(clickGain).connect(ctx.destination);
-    click.start(now);
-    click.stop(now + 0.05);
+    click.start(t0);
+    click.stop(t0 + 0.045);
+
+    hitSources.push(thump, click);
 
     if (damage >= 6) {
       const noise = ctx.createBufferSource();
@@ -114,14 +143,17 @@ function playHitSound(damage: number): void {
       filter.type = 'lowpass';
       filter.frequency.value = 720;
       const crowd = ctx.createGain();
-      crowd.gain.setValueAtTime(0.07 + damage * 0.008, now);
-      crowd.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
+      crowd.gain.setValueAtTime(0.07 + damage * 0.008, t0);
+      crowd.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26);
       noise.buffer = buffer;
       noise.connect(filter).connect(crowd).connect(ctx.destination);
-      noise.start(now);
+      noise.start(t0);
+      hitSources.push(noise);
     }
+    return true;
   } catch {
     // Audio is optional juice; a blocked Autoplay policy should not stall combat.
+    return false;
   }
 }
 
@@ -169,14 +201,11 @@ export class FighterCards {
   private burst: ImpactBurst | null = null;
   private originHero: FighterPose | null = null;
   private originFoe: FighterPose | null = null;
-  private shardCells: { sx: number; sy: number; sw: number; sh: number }[] = [];
   private settlementPreview: { attack: number; armor: number; foeHp?: number } | null = null;
   private constructor(
     private readonly portraits: HTMLImageElement[],
     private readonly frame: HTMLImageElement,
-    private readonly fxShards: HTMLImageElement | null,
     private readonly fxDust: HTMLImageElement | null,
-    private readonly fxCrack: HTMLImageElement | null,
     private readonly fxStar: HTMLImageElement | null,
   ) {
     // The portraits and stats are static: rasterize once at the maximum stage DPR.
@@ -194,17 +223,13 @@ export class FighterCards {
 
   static async create(): Promise<FighterCards> {
     const loadFx = (src: string) => loadImage(src).catch(() => null);
-    const [portraits, frame, fxShards, fxDust, fxCrack, fxStar] = await Promise.all([
+    const [portraits, frame, fxDust, fxStar] = await Promise.all([
       Promise.all(FIGHTERS.map((f) => loadImage(f.src))),
       loadImage('/assets/ui/card-frame.png'),
-      loadFx('/assets/fx/impact-shards.png?v=2'),
       loadFx('/assets/fx/impact-dust.png?v=2'),
-      loadFx('/assets/fx/impact-crack.png?v=2'),
       loadFx('/assets/fx/impact-star.png?v=3'),
     ]);
-    const cards = new FighterCards(portraits, frame, fxShards, fxDust, fxCrack, fxStar);
-    if (fxShards) cards.shardCells = sliceSheet(fxShards, 3, 3);
-    return cards;
+    return new FighterCards(portraits, frame, fxDust, fxStar);
   }
 
   setBattle(battle: Battle): void {
@@ -230,6 +255,7 @@ export class FighterCards {
     for (let i = 0; i < this.cards.length; i++) {
       const canvas = this.cards[i]!;
       const g = canvas.getContext('2d')!;
+      g.setTransform(2, 0, 0, 2, 0, 0);
       g.clearRect(0, 0, CARD_W, CARD_H);
       this.drawCard(g, 0, 0, i);
     }
@@ -237,22 +263,27 @@ export class FighterCards {
 
   setHitFeel(feel: HitFeel): void {
     this.feel = feel;
+    this.redrawCards();
+  }
+
+  refreshCards(): void {
+    this.redrawCards();
+  }
+
+  primeAudio(): void {
+    ensureHitAudio();
   }
 
   playStrike(request: StrikeRequest): number {
-    try {
-      hitAudio ??= new AudioContext();
-      void hitAudio.resume();
-    } catch { /* ignore */ }
-    this.strike = { ...request, elapsed: 0, impacted: false, fxSpawned: false };
-    return request.reducedMotion ? REDUCED_STRIKE.end : STRIKE.end;
+    const timing = request.reducedMotion ? REDUCED_STRIKE : STRIKE;
+    stopHitSound();
+    ensureHitAudio();
+    this.strike = { ...request, elapsed: 0, impacted: false, fxSpawned: false, sounded: false };
+    return timing.end;
   }
 
   previewShake(damage: number): void {
-    try {
-      hitAudio ??= new AudioContext();
-      void hitAudio.resume();
-    } catch { /* ignore */ }
+    stopHitSound();
     playHitSound(damage);
     this.shakeAge = 0;
     this.shakeAmp = shakeAmplitude(this.feel, damage);
@@ -272,7 +303,27 @@ export class FighterCards {
   }
 
   cancelStrike(): void {
+    stopHitSound();
     this.strike = null;
+  }
+
+  clearBurst(): void {
+    this.burst = null;
+  }
+
+  private spawnContactFx(direction: number, hero: FighterPose, foe: FighterPose, damage: number): void {
+    if (!this.feel.showBurst) {
+      this.burst = null;
+      return;
+    }
+    const punch = this.attackPose(STRIKE.impact, hero, foe);
+    this.burst = spawnImpact(
+      punch.x + direction * CARD_W * 0.48,
+      punch.y,
+      direction,
+      damage,
+      0,
+    );
   }
 
   cameraShake(): { x: number; y: number } {
@@ -299,10 +350,17 @@ export class FighterCards {
     if (!strike) return;
     strike.elapsed += dt;
     const timing = strike.reducedMotion ? REDUCED_STRIKE : STRIKE;
+    if (!strike.sounded && !strike.reducedMotion) {
+      const ctx = ensureHitAudio();
+      const lead = ctx ? hitAudioLead(ctx) : 0.14;
+      if (strike.elapsed >= timing.impact - lead) {
+        stopHitSound();
+        strike.sounded = playHitSound(strike.damage);
+      }
+    }
     if (!strike.impacted && strike.elapsed >= timing.impact) {
       strike.impacted = true;
       if (!strike.reducedMotion) {
-        playHitSound(strike.damage);
         this.shakeAge = 0;
         this.shakeAmp = shakeAmplitude(this.feel, strike.damage);
         const hero = this.originHero;
@@ -311,14 +369,7 @@ export class FighterCards {
         this.shakeDir = dir;
         if (hero && foe && !strike.fxSpawned) {
           strike.fxSpawned = true;
-          const punch = this.attackPose(STRIKE.impact, hero, foe);
-          this.burst = spawnImpact(
-            punch.x + dir * CARD_W * 0.48,
-            punch.y,
-            dir,
-            strike.damage,
-            this.shardCells.length,
-          );
+          this.spawnContactFx(dir, hero, foe, strike.damage);
         }
       }
       strike.onImpact();
@@ -427,9 +478,8 @@ export class FighterCards {
     if (!strike) {
       this.paintFighter(g, 0, hero);
       this.paintFighter(g, 1, foe);
-      if (this.burst && this.fxCrack) drawDecal(g, this.burst, this.fxCrack, foe);
       if (this.burst) {
-        drawImpactBurst(g, this.burst, { shards: this.fxShards ?? undefined, dust: this.fxDust ?? undefined, star: this.fxStar ?? undefined }, this.shardCells);
+        drawImpactBurst(g, this.burst, { dust: this.fxDust ?? undefined, star: this.fxStar ?? undefined });
       }
       return;
     }
@@ -442,17 +492,9 @@ export class FighterCards {
     const attacker = strike.reducedMotion ? hero : this.attackPose(strike.elapsed, hero, foe);
     if (hit && !strike.reducedMotion && !strike.fxSpawned) {
       strike.fxSpawned = true;
-      const punch = this.attackPose(STRIKE.impact, hero, foe);
-      this.burst = spawnImpact(
-        punch.x + direction * CARD_W * 0.48,
-        punch.y,
-        direction,
-        strike.damage,
-        this.shardCells.length,
-      );
+      this.spawnContactFx(direction, hero, foe, strike.damage);
     }
     this.paintFighter(g, 1, defender, 1, hit ? Math.exp(-Math.max(0, age) * 38) * 0.55 : 0);
-    if (this.burst && this.fxCrack) drawDecal(g, this.burst, this.fxCrack, defender);
     if (!strike.reducedMotion && strike.elapsed > STRIKE.windup + 0.05 && strike.elapsed < STRIKE.impact) {
       // Two brief afterimages communicate speed without moving the board or HUD.
       this.paintFighter(g, 0, this.attackPose(strike.elapsed - 0.036, hero, foe), 0.06);
@@ -460,12 +502,12 @@ export class FighterCards {
     }
     this.paintFighter(g, 0, attacker);
     if (this.burst) {
-      drawImpactBurst(g, this.burst, { shards: this.fxShards ?? undefined, dust: this.fxDust ?? undefined, star: this.fxStar ?? undefined }, this.shardCells);
+      drawImpactBurst(g, this.burst, { dust: this.fxDust ?? undefined, star: this.fxStar ?? undefined });
     }
-    if (hit) this.drawImpact(g, defender, strike, age, direction);
+    if (hit) this.drawImpact(g, defender, strike, age);
   }
 
-  private drawImpact(g: CanvasRenderingContext2D, target: FighterPose, strike: Strike, age: number, direction: number): void {
+  private drawImpact(g: CanvasRenderingContext2D, target: FighterPose, strike: Strike, age: number): void {
     const end = strike.reducedMotion ? REDUCED_STRIKE.end : STRIKE.end;
     const alpha = clamp01((end - strike.elapsed) / 0.1);
     const pop = strike.reducedMotion ? 1 : age < 0.035 ? lerp(0.9, 1.25, age / 0.035) : 1 + springDisplacement(age - 0.035, 0.25, -2, 22, 26);
@@ -523,7 +565,9 @@ export class FighterCards {
     const scale = Math.min(iw / portrait.naturalWidth, portraitHeight / portrait.naturalHeight) * 1.08;
     const dw = portrait.naturalWidth * scale;
     const dh = portrait.naturalHeight * scale;
-    g.drawImage(portrait, x + (w - dw) / 2, iy + 8, dw, dh);
+    const px = x + (w - dw) / 2;
+    const py = iy + 8;
+    g.drawImage(portrait, px, py, dw, dh);
 
     const fade = g.createLinearGradient(0, y + 282, 0, y + 382);
     fade.addColorStop(0, 'rgba(23, 18, 17, 0)');

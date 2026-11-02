@@ -69,7 +69,7 @@ const images = {
   foe: new Image(),
 };
 images.hero.src = '/assets/chars/druid.png?v=1';
-images.foe.src = '/assets/chars/foe.png?v=1';
+images.foe.src = '/assets/chars/elder.png?v=1';
 
 const originHero = (): Pose => ({ x: 280, y: 290, angle: 0, sx: 1, sy: 1 });
 const originFoe = (): Pose => ({ x: 680, y: 290, angle: 0, sx: 1, sy: 1 });
@@ -521,7 +521,7 @@ function draw(): void {
     ctx.globalAlpha = 1;
   }
 
-  drawCard(ctx, foe, images.foe, flash, '缝偶');
+  drawCard(ctx, foe, images.foe, flash, '老者');
   drawCard(ctx, hero, images.hero, 0, '德鲁伊');
   if (impacted) {
     drawShockwave(ctx, foe.x, foe.y, fxAge);

@@ -5,6 +5,7 @@ import {
   TEXT_SLOTS,
   artKey,
   artUrl,
+  cardKeywords,
   cardKindLabel,
   cardStatsText,
   isTextSlot,
@@ -12,6 +13,7 @@ import {
   type CatalogCard,
   type TextSlot,
 } from '@/config/catalog';
+import { KEYWORDS, isKeywordId, keywordMarkup } from '@/config/keywords';
 import { clientToDesign, computeDesignFit } from '@/config/design';
 
 const SLOT_CLASS: Record<TextSlot, string> = {
@@ -47,10 +49,12 @@ export function mountCardPreview(
       <span class="hand-card__kind" data-slot="kind"></span>
       <span class="hand-card__stats" data-slot="stats"></span>
       <span class="hand-card__description" data-slot="description"></span>
+      <span class="hand-card__keywords"></span>
     </article>
   `;
   const cardEl = root.querySelector('.hand-card')!;
   const img = root.querySelector<HTMLImageElement>('.hand-card__art img')!;
+  const keywordsEl = root.querySelector<HTMLElement>('.hand-card__keywords')!;
   const nodes = Object.fromEntries(
     TEXT_SLOTS.map((slot) => [slot, root.querySelector(`.${SLOT_CLASS[slot]}`)!]),
   ) as Record<TextSlot, HTMLElement>;
@@ -124,6 +128,12 @@ export function mountCardPreview(
       nodes.kind.textContent = cardKindLabel(card);
       nodes.stats.textContent = cardStatsText(card);
       nodes.description.textContent = card.description;
+      const tags = cardKeywords(card);
+      keywordsEl.innerHTML = keywordMarkup(tags);
+      cardEl.classList.toggle('has-keywords', tags.length > 0);
+      for (const mark of keywordsEl.querySelectorAll<HTMLElement>('.card-keyword')) {
+        if (isKeywordId(mark.dataset.keyword)) mark.title = KEYWORDS[mark.dataset.keyword].hint;
+      }
       applyLayout(nextLayout, selected);
     },
   };

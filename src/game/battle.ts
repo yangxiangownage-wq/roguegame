@@ -1,32 +1,44 @@
+import type { KeywordId } from '@/config/keywords';
 import type { BoardUnit, CardKey, PieceKind } from '@/config/pieces';
 export type { CardKey } from '@/config/pieces';
 export type CardDefinition = {
-  title: string; cost: number; kind: '攻击' | '技能';
+  title: string; cost: number; kind: '攻击' | '技能' | '法术';
   description: string[]; damage?: number; block?: number; draw?: number;
   energy?: number; nextEnergy?: number; comboDraw?: boolean;
-  boardKind: Exclude<PieceKind, 'gold'>; boardDamage?: number; boardArmor?: number; boardEnergy?: number; mines?: boolean;
+  keywords?: KeywordId[];
+  boardKind?: Exclude<PieceKind, 'gold'>; boardDamage?: number; boardArmor?: number; boardEnergy?: number; mines?: boolean;
   art: 'hero' | 'foe' | 'sword' | 'slave' | 'imp'; tone: string;
 };
+const STAY: KeywordId[] = ['permanent'];
+const SPELL: KeywordId[] = ['spell'];
 export const CARD_DEFS: Record<CardKey, CardDefinition> = {
-  blade: { title: '飞刃', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 4 点伤害。'], damage: 4, boardKind: 'mark', boardDamage: 4, art: 'sword', tone: 'crimson' },
-  leap: { title: '跃起', cost: 1, kind: '技能', description: ['留在棋盘上；每回合结算获得 4 点护甲。'], block: 4, boardKind: 'guard', boardArmor: 4, art: 'hero', tone: 'teal' },
-  slash: { title: '海盗斩击', cost: 2, kind: '攻击', description: ['留在棋盘上；每回合结算造成 8 点伤害。'], damage: 8, boardKind: 'mark', boardDamage: 8, art: 'foe', tone: 'crimson' },
-  mist: { title: '雾影步', cost: 0, kind: '技能', description: ['留在棋盘上；每回合结算获得 6 点护甲，', '并为下回合储备 1 点能量。'], block: 6, nextEnergy: 1, boardKind: 'energy', boardArmor: 6, boardEnergy: 1, art: 'hero', tone: 'teal' },
-  hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 5 点伤害，', '并为下回合储备 1 点能量。'], damage: 5, boardKind: 'mark', boardDamage: 5, boardEnergy: 1, art: 'sword', tone: 'amber' },
-  slave: { title: '矿工', cost: 1, kind: '技能', description: ['留在棋盘上；相邻金矿时首次开采，', '永久增加 1 点能量上限。'], boardKind: 'slave', mines: true, art: 'slave', tone: 'crimson' },
-  imp: { title: '小恶魔', cost: 1, kind: '攻击', description: ['留在棋盘上；每回合结算造成 2 点伤害。'], damage: 2, boardKind: 'imp', boardDamage: 2, art: 'imp', tone: 'crimson' },
+  blade: { title: '鹿角', cost: 1, kind: '攻击', description: ['每回合结算造成 4 点伤害。'], damage: 4, keywords: STAY, boardKind: 'mark', boardDamage: 4, art: 'sword', tone: 'crimson' },
+  leap: { title: '盾', cost: 1, kind: '技能', description: ['每回合结算获得 4 点护甲。'], block: 4, keywords: STAY, boardKind: 'guard', boardArmor: 4, art: 'hero', tone: 'teal' },
+  slash: { title: '海盗斩击', cost: 2, kind: '攻击', description: ['每回合结算造成 8 点伤害。'], damage: 8, keywords: STAY, boardKind: 'mark', boardDamage: 8, art: 'foe', tone: 'crimson' },
+  mist: { title: '雾影步', cost: 0, kind: '技能', description: ['每回合结算获得 6 点护甲，', '并为下回合储备 1 点能量。'], block: 6, nextEnergy: 1, keywords: STAY, boardKind: 'energy', boardArmor: 6, boardEnergy: 1, art: 'hero', tone: 'teal' },
+  hook: { title: '钩掠', cost: 1, kind: '攻击', description: ['每回合结算造成 5 点伤害，', '并为下回合储备 1 点能量。'], damage: 5, keywords: STAY, boardKind: 'mark', boardDamage: 5, boardEnergy: 1, art: 'sword', tone: 'amber' },
+  slave: { title: '矿工', cost: 1, kind: '技能', description: ['相邻金矿时首次开采，', '增加 1 点能量上限。'], keywords: STAY, boardKind: 'slave', mines: true, art: 'slave', tone: 'crimson' },
+  imp: { title: '小恶魔', cost: 1, kind: '攻击', description: ['每回合结算造成 2 点伤害。'], damage: 2, keywords: STAY, boardKind: 'imp', boardDamage: 2, art: 'imp', tone: 'crimson' },
+  ember: { title: '余烬', cost: 1, kind: '法术', description: ['立刻造成 8 点伤害。'], damage: 8, keywords: SPELL, art: 'sword', tone: 'crimson' },
+  hymn: { title: '祷言', cost: 1, kind: '法术', description: ['立刻获得 8 点护甲。'], block: 8, keywords: SPELL, art: 'hero', tone: 'teal' },
+  lamp: { title: '油灯', cost: 0, kind: '法术', description: ['立刻为下回合储备 1 点能量。'], nextEnergy: 1, keywords: SPELL, art: 'slave', tone: 'amber' },
 };
+export const isSpellCard = (key: CardKey): boolean => CARD_DEFS[key].kind === '法术';
 export type BattleCard = { id: number; key: CardKey };
 export type Phase = 'player' | 'enemy' | 'won' | 'lost';
 export type PlayResult = { ok: boolean; message: string; damage: number; block: number };
 export type BoardSettlement = { damage: number; armor: number; energy: number; mined: number; minedIds: number[]; unitIds: number[]; victory: boolean };
-const STARTING_DECK: CardKey[] = ['imp', 'blade', 'leap', 'slash', 'mist', 'hook', 'blade', 'leap', 'slash', 'blade', 'leap', 'slave', 'hook'];
+export const STARTING_DECK: CardKey[] = [
+  'blade', 'leap', 'blade', 'leap', 'blade',
+  'leap', 'blade', 'leap', 'blade', 'leap',
+];
 
 /** Pure combat state. Animation timing lives in BattleView, never in the rules. */
 export class Battle {
   hand: BattleCard[] = [];
   drawPile: BattleCard[] = [];
   discardPile: BattleCard[] = [];
+  exhaustPile: BattleCard[] = [];
   heroHp = 20;
   readonly heroMaxHp = 20;
   foeHp = 36;
@@ -48,7 +60,7 @@ export class Battle {
   constructor(private readonly random: () => number = Math.random) { this.reset(); }
 
   get intent(): number { return [6, 8, 10][(this.turn - 1) % 3]!; }
-  reset(): void {
+  reset(deck: readonly CardKey[] = STARTING_DECK, orderedHand = true): void {
     this.heroHp = this.heroMaxHp;
     this.foeHp = this.foeMaxHp;
     this.block = this.nextEnergy = this.attacksPlayed = 0;
@@ -60,10 +72,17 @@ export class Battle {
     this.nextUnitId = 1000;
     this.phase = 'player';
     this.discardPile = [];
-    // A readable first hand teaches all five mechanics; subsequent draws are shuffled.
-    const deck = STARTING_DECK.map((key, id) => ({ id, key }));
-    this.hand = deck.slice(0, 5);
-    this.drawPile = this.shuffle(deck.slice(5));
+    this.exhaustPile = [];
+    const keys = deck.length ? [...deck] : [...STARTING_DECK];
+    const cards = keys.map((key, id) => ({ id, key }));
+    if (orderedHand) {
+      this.hand = cards.slice(0, 5);
+      this.drawPile = this.shuffle(cards.slice(5));
+    } else {
+      this.shuffle(cards);
+      this.hand = cards.slice(0, Math.min(5, cards.length));
+      this.drawPile = cards.slice(this.hand.length);
+    }
     this.revision++;
   }
   configureBoard(cols: number, rows: number, mines: Array<{ col: number; row: number }>): void {
@@ -86,13 +105,26 @@ export class Battle {
       this.hand.push(card);
     }
   }
-  /** Placement prototype: spending a card must not trigger direct combat effects. */
-  placeCard(id: number, col?: number, row?: number): { ok: boolean; message: string; unit?: BoardUnit } {
+  /** Units occupy a cell and do not strike on spend. Spells resolve immediately and leave the board empty. */
+  placeCard(id: number, col?: number, row?: number): { ok: boolean; message: string; unit?: BoardUnit; spell?: boolean } {
     const index = this.hand.findIndex(card => card.id === id);
     if (this.phase !== 'player' || index < 0) return { ok: false, message: '现在不能放置' };
     const card = this.hand[index]!;
     const def = CARD_DEFS[card.key];
     if (this.energy < def.cost) return { ok: false, message: `能量不足，需要 ${def.cost} 点能量` };
+    if (def.kind === '法术') {
+      this.energy -= def.cost;
+      this.hand.splice(index, 1);
+      this.exhaustPile.push(card);
+      const damage = Math.min(this.foeHp, def.damage ?? 0);
+      this.foeHp -= damage;
+      this.block += def.block ?? 0;
+      this.nextEnergy += def.nextEnergy ?? 0;
+      if (this.foeHp === 0) this.phase = 'won';
+      this.revision++;
+      return { ok: true, message: def.title, spell: true };
+    }
+    if (!def.boardKind) return { ok: false, message: '现在不能放置' };
     const cell = this.firstOpenCell(col, row);
     if (!cell) return { ok: false, message: '棋盘没有空位' };
     this.energy -= def.cost;
@@ -220,8 +252,6 @@ export class Battle {
     this.nextEnergy = this.attacksPlayed = 0;
     this.phase = 'player';
     this.draw(5);
-    const cell = this.firstOpenCell();
-    if (cell) this.units.push({ id: this.nextUnitId++, owner: 'enemy', kind: 'threat', col: cell.col, row: cell.row, attack: 2 });
     this.revision++;
     return true;
   }
