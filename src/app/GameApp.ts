@@ -49,7 +49,7 @@ export class GameApp {
     if (!feelPanel) throw new Error('#feel-inspector missing');
     const hitFeel = loadHitFeelSave();
     this.fighters.setHitFeel(hitFeel);
-    mountFeelInspector(feelPanel, hitFeel, hitFeel, this.fighters);
+    mountFeelInspector(feelPanel, hitFeel, { ...hitFeel, hidden: true }, this.fighters);
     this.battleView = new BattleView(this.settings, this.board, this.fighters);
     this.battleView.setTalking(true);
     this.talk = new TalkView(() => {

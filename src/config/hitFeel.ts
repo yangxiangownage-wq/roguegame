@@ -10,6 +10,7 @@ export type HitFeel = {
 export type HitFeelSave = HitFeel & {
   panelX: number;
   panelY: number;
+  hidden?: boolean;
 };
 
 export const DEFAULT_HIT_FEEL: HitFeel = {
@@ -40,7 +41,7 @@ export function shakeAmplitude(feel: HitFeel, damage: number): number {
 }
 
 export function loadHitFeelSave(): HitFeelSave {
-  const fallback: HitFeelSave = { ...DEFAULT_HIT_FEEL, panelX: 780, panelY: 24 };
+  const fallback: HitFeelSave = { ...DEFAULT_HIT_FEEL, panelX: 780, panelY: 24, hidden: true };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -54,6 +55,7 @@ export function loadHitFeelSave(): HitFeelSave {
       crackWound: 0,
       panelX: clamp(Number(parsed.panelX) || fallback.panelX, 0, 1920),
       panelY: clamp(Number(parsed.panelY) || fallback.panelY, 0, 1080),
+      hidden: parsed.hidden !== false,
     };
   } catch {
     return fallback;

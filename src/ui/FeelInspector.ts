@@ -40,7 +40,8 @@ export function mountFeelInspector(
   fighters: FighterCards,
 ): void {
   root.replaceChildren();
-  root.classList.add('inspector', 'is-open');
+  root.classList.add('inspector');
+  root.classList.toggle('is-open', save.hidden === false);
   const panelX = save.panelX >= 1400 ? 780 : save.panelX;
   const panelY = save.panelY >= 360 && save.panelX >= 1400 ? 24 : save.panelY;
   save.panelX = panelX;
@@ -58,6 +59,7 @@ export function mountFeelInspector(
     Object.assign(save, feel, {
       panelX: parseFloat(root.style.left) || save.panelX,
       panelY: parseFloat(root.style.top) || save.panelY,
+      hidden: !root.classList.contains('is-open'),
     });
     saveHitFeelSave(save);
     savedSnap = JSON.stringify(save);
@@ -75,6 +77,8 @@ export function mountFeelInspector(
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
     e.preventDefault();
     root.classList.toggle('is-open');
+    save.hidden = !root.classList.contains('is-open');
+    saveHitFeelSave(save);
   });
 
   const header = document.createElement('header');
