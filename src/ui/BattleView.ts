@@ -1007,16 +1007,16 @@ export class BattleView {
 
   private renderShop(): void {
     const slots = this.shopSlots.map((slot, index) => {
-      const spell = index === this.shopSlots.length - 1;
+      const unit = index === this.shopSlots.length - 1;
       if (!slot) {
-        return `<button class="shop-slot${spell ? ' shop-slot--spell' : ''} is-empty" disabled data-index="${index}"><span class="shop-slot__empty">已售出</span>${spell ? '<span class="shop-slot__tag">法术</span>' : ''}</button>`;
+        return `<button class="shop-slot${unit ? ' shop-slot--unit' : ' shop-slot--spell'} is-empty" disabled data-index="${index}"><span class="shop-slot__empty">已售出</span><span class="shop-slot__tag">${unit ? '随从' : '法术'}</span></button>`;
       }
       const def = CARD_DEFS[slot.key];
       const unaffordable = this.gold < slot.price;
-      return `<button class="shop-slot${slot.kind === 'spell' ? ' shop-slot--spell' : ''}${unaffordable ? ' is-unaffordable' : ''}" data-index="${index}" aria-label="花费 ${slot.price} 金购买${def.title}"><span class="shop-slot__tag">${slot.kind === 'spell' ? '法术' : '棋子'}</span>${this.shopCardHtml(slot.key, index)}<span class="shop-slot__price">${slot.price}</span></button>`;
+      return `<button class="shop-slot${slot.kind === 'spell' ? ' shop-slot--spell' : ' shop-slot--unit'}${unaffordable ? ' is-unaffordable' : ''}" data-index="${index}" aria-label="花费 ${slot.price} 金购买${def.title}"><span class="shop-slot__tag">${slot.kind === 'spell' ? '法术' : '随从'}</span>${this.shopCardHtml(slot.key, index)}<span class="shop-slot__price">${slot.price}</span></button>`;
     }).join('');
     const bought = this.bought.length ? this.bought.join('、') : '还没有买东西';
-    this.shop.innerHTML = `<div class="battle-shop__stage"><header class="battle-shop__header"><p>胜利 · 补给</p><h1>商店</h1><p>前四格是棋子，最后一格永远是法术。</p></header><div class="battle-shop__gold" aria-label="金币 ${this.gold}"><img src="/assets/chars/emblem-bag.png?v=2" alt=""><strong>${this.gold}</strong><span>金币</span></div><div class="battle-shop__tray">${slots}</div><p class="battle-shop__bought">已购：${bought}</p><div class="battle-shop__actions"><button type="button" data-shop="reroll">刷新 · ${REROLL_COST}</button><button type="button" data-shop="leave">出发</button></div></div>`;
+    this.shop.innerHTML = `<div class="battle-shop__stage"><header class="battle-shop__header"><p>胜利 · 补给</p><h1>商店</h1><p>前三格是法术，最后一格永远是随从。</p></header><div class="battle-shop__gold" aria-label="金币 ${this.gold}"><img src="/assets/chars/emblem-bag.png?v=2" alt=""><strong>${this.gold}</strong><span>金币</span></div><div class="battle-shop__tray">${slots}</div><p class="battle-shop__bought">已购：${bought}</p><div class="battle-shop__actions"><button type="button" data-shop="reroll">刷新 · ${REROLL_COST}</button><button type="button" data-shop="leave">出发</button></div></div>`;
   }
 
   private onShopClick(event: Event): void {

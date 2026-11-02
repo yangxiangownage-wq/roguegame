@@ -1,7 +1,8 @@
 import type { CardKey } from '@/config/pieces';
 
-export const SHOP_SIZE = 5;
-export const SPELL_SLOT = 4;
+export const SHOP_SIZE = 4;
+export const SPELL_COUNT = 3;
+export const UNIT_SLOT = 3;
 export const REROLL_COST = 2;
 export const WIN_GOLD = 10;
 export const START_GOLD = 0;
@@ -26,11 +27,23 @@ const pick = <T>(pool: readonly T[], random: () => number): T => {
   return pool[Math.floor(random() * pool.length) % pool.length]!;
 };
 
+const pickUnique = <T>(pool: readonly T[], count: number, random: () => number): T[] => {
+  const bag = [...pool];
+  const out: T[] = [];
+  for (let i = 0; i < count; i++) {
+    if (!bag.length) {
+      out.push(pick(pool, random));
+      continue;
+    }
+    const index = Math.floor(random() * bag.length) % bag.length;
+    out.push(bag.splice(index, 1)[0]!);
+  }
+  return out;
+};
+
 export function rollShop(random: () => number = Math.random): ShopSlot[] {
-  const slots: ShopSlot[] = [];
-  for (let i = 0; i < SPELL_SLOT; i++) slots.push({ ...pick(UNIT_STOCK, random) });
-  slots.push({ ...pick(SPELL_STOCK, random) });
-  return slots;
+  const spells = pickUnique(SPELL_STOCK, SPELL_COUNT, random).map(item => ({ ...item }));
+  return [...spells, { ...pick(UNIT_STOCK, random) }];
 }
 
 export function buyShopSlot(
