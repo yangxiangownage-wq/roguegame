@@ -14,6 +14,7 @@ import { mountBoardInspector } from '@/ui/BoardInspector';
 import { mountHudInspector } from '@/ui/HudInspector';
 import { mountFeelInspector } from '@/ui/FeelInspector';
 import { loadHitFeelSave } from '@/config/hitFeel';
+import { shouldPlayOpeningTalk } from '@/config/talk';
 import { TalkView } from '@/ui/TalkView';
 
 export class GameApp {
@@ -51,11 +52,13 @@ export class GameApp {
     this.fighters.setHitFeel(hitFeel);
     mountFeelInspector(feelPanel, hitFeel, { ...hitFeel, hidden: true }, this.fighters);
     this.battleView = new BattleView(this.settings, this.board, this.fighters);
-    this.battleView.setTalking(true);
-    this.talk = new TalkView(() => {
-      this.talk = null;
-      this.battleView.setTalking(false);
-    });
+    if (shouldPlayOpeningTalk()) {
+      this.battleView.setTalking(true);
+      this.talk = new TalkView(() => {
+        this.talk = null;
+        this.battleView.setTalking(false);
+      });
+    }
     this.fit = applyDesignStage();
     this.bindResize();
     this.bindPointer();

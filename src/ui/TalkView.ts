@@ -1,7 +1,7 @@
-import { TALK_SCRIPT, type TalkSide } from '@/config/talk';
+import { TALK_SCRIPT, markOpeningTalkDone, type TalkSide } from '@/config/talk';
 import './talk.css';
 
-const CHAR_MS = 36; // typewriter cadence
+const CHAR_MS = 36; // typewriter cadence; name is plain text, layout in talk.css
 
 export class TalkView {
   private readonly root = document.createElement('section');
@@ -34,12 +34,23 @@ export class TalkView {
     this.left.append(portrait('/assets/chars/druid.png', '你'));
     this.right.append(portrait('/assets/chars/elder.png', '老者'));
     this.subtitle.className = 'talk-subtitle';
+    const copy = document.createElement('div');
+    copy.className = 'talk-subtitle__copy';
     this.nameEl.className = 'talk-subtitle__name';
     this.textEl.className = 'talk-subtitle__text';
     this.textEl.setAttribute('aria-live', 'polite');
     this.hint.className = 'talk-subtitle__hint';
-    this.subtitle.append(this.nameEl, this.textEl, this.hint);
-    this.root.append(this.left, this.right, this.subtitle);
+    copy.append(this.nameEl, this.textEl, this.hint);
+    this.subtitle.append(copy);
+    const skip = document.createElement('button');
+    skip.type = 'button';
+    skip.className = 'talk-skip';
+    skip.textContent = '跳过';
+    skip.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.close();
+    });
+    this.root.append(this.left, this.right, this.subtitle, skip);
     this.root.addEventListener('click', () => this.advance());
     window.addEventListener('keydown', this.onKey);
     const stage = document.getElementById('design-root')!;
@@ -146,6 +157,7 @@ export class TalkView {
       window.removeEventListener('keydown', this.onKey);
       document.getElementById('design-root')?.classList.remove('is-talking');
       this.root.remove();
+      markOpeningTalkDone();
       this.onDone();
     };
     if (this.reduced.matches) {

@@ -3,6 +3,7 @@ import type { CardKey } from '@/config/pieces';
 import type { StoneBoard } from '@/render/board';
 import type { FighterCards } from '@/render/fighterCards';
 import { battleLayout, boardCellCenter, boardTarget, isBoardArea } from '@/config/battleLayout';
+import { DISSOLVE_SEC } from '@/render/radialDissolve';
 import { clientToDesign, computeDesignFit, DESIGN_WIDTH } from '@/config/design';
 import type { BoardSettings } from '@/config/board';
 import { KEYWORDS, isKeywordId, keywordLabels, keywordMarkup } from '@/config/keywords';
@@ -38,7 +39,7 @@ const ART = {
   sword: '/assets/chars/emblem-antlers.png?v=2',
   slave: '/assets/chars/emblem-bag.png?v=2',
   imp: '/assets/chars/druid.png?v=1',
-  tutor: '/assets/chars/elder.png',
+  tutor: '/assets/tiles/face-unit.png?v=2',
 };
 const PILE_BUTTON = { width: 100, height: 125, backWidth: 62, backHeight: 89 };
 const DRAW_PILE = { left: 280, top: 940, scale: 0.8 };
@@ -611,23 +612,11 @@ export class BattleView {
     // Clear the pending target without tucking the rest of the hand.
     this.cancel(false);
     if (!result.spell) this.board.syncUnits(this.battle.units, this.reduced.matches ? 0 : PLAY_FLIGHT);
-    node.origin = { ...node.pose };
     node.spell = Boolean(result.spell);
-    node.element.classList.add('is-playing');
-    node.destination = {
-      x: target.x + target.size / 2,
-      y: target.y + target.size / 2,
-      scale: Math.min(0.42, target.size * 0.82 / 300),
-      col: target.col,
-      row: target.row,
-    };
-    node.state = 'play';
-    node.elapsed = 0;
+    this.beginPlayFlight(node, target.col, target.row);
     this.placementAnimating = true;
     this.root.classList.add('is-placement-animating');
     this.handToggle.disabled = true;
-    node.element.style.pointerEvents = 'none';
-    node.element.setAttribute('aria-hidden', 'true');
     this.message(result.spell
       ? `${result.message}：立刻生效`
       : `${result.message}：已放入第 ${target.row + 1} 行、第 ${target.col + 1} 列`);
@@ -897,7 +886,7 @@ export class BattleView {
   private playElderAction(action: EnemyAction): void {
     if (action.type === 'minion') {
       this.message('老者放下学徒：撞完之后，空邻格才会生成法术');
-      this.flyElderMinion(action.unit);
+      this.summonElderMinion(action.unit);
       return;
     }
     if (action.type === 'spell') {
@@ -912,42 +901,55 @@ export class BattleView {
     this.sync();
   }
 
-  private flyElderMinion(unit: { col: number; row: number }): void {
+  private playDestination(col: number, row: number): NonNullable<CardNode['destination']> {
+    const size = this.settings.tileSize * battleLayout(this.settings).scale;
+    const cell = boardCellCenter(this.settings, col, row);
+    return {
+      x: cell.x,
+      y: cell.y,
+      scale: Math.min(0.42, size * 0.82 / 300),
+      col,
+      row,
+    };
+  }
+
+  /** Shared click-to-place flight: lift pose → tile, then fade as the piece stamps in. */
+  private beginPlayFlight(node: CardNode, col: number, row: number): void {
+    node.origin = { ...node.pose };
+    node.destination = this.playDestination(col, row);
+    node.state = 'play';
+    node.elapsed = 0;
+    node.landed = false;
+    node.element.classList.add('is-playing');
+    node.element.style.pointerEvents = 'none';
+    node.element.setAttribute('aria-hidden', 'true');
+    this.writeCardTransform(node, 0);
+  }
+
+  private writeCardTransform(node: CardNode, fold: number): void {
+    const p = node.pose;
+    const cardScale = this.settings.handCardScale / 100;
+    node.element.style.transform = `translate3d(${p.x - 100}px, ${p.y - 150}px, 0) rotate(${p.angle}deg) scale(${p.scale * cardScale}) scaleY(${1 - fold * 0.92})`;
+    node.element.style.zIndex = String(node.state === 'discard' ? 30 + node.layer : node.state !== 'hand' ? 40 : 1);
+  }
+
+  private summonElderMinion(unit: { id: number; col: number; row: number }): void {
+    this.board.syncUnits(this.battle.units, 0);
+    this.board.pulseSettlement([unit.id]);
+    this.sync();
     if (this.reduced.matches) {
-      this.board.syncUnits(this.battle.units, 0);
       this.turnCue = 'enemy-strike';
       this.turnPause = 0.08;
-      this.sync();
       return;
     }
-    const def = CARD_DEFS.tutor;
-    const element = document.createElement('div');
-    element.className = `hand-card hand-card--${def.tone} hand-card--tutor is-elder-play`;
-    element.innerHTML = `<span class="hand-card__art"><img src="${ART.tutor}" alt="" draggable="false"></span><span class="hand-card__frame"></span><span class="hand-card__cost">${def.cost}</span><span class="hand-card__title">${def.title}</span><span class="hand-card__kind">${def.kind}</span><span class="hand-card__description">${def.description.join('<br>')}</span>`;
-    element.style.pointerEvents = 'none';
-    element.style.zIndex = '55';
-    this.root.append(element);
-    const layout = battleLayout(this.settings);
-    const from = { x: layout.foeX, y: (layout.foeTop + layout.foeBottom) / 2 };
-    const to = boardCellCenter(this.settings, unit.col, unit.row);
-    element.style.transform = `translate3d(${from.x - 100}px, ${from.y - 150}px, 0) scale(0.56)`;
     this.elderFlight = true;
-    const anim = element.animate(
-      [
-        { transform: `translate3d(${from.x - 100}px, ${from.y - 150}px, 0) rotate(-8deg) scale(0.56)`, offset: 0 },
-        { transform: `translate3d(${(from.x + to.x) / 2 - 100}px, ${(from.y + to.y) / 2 - 210}px, 0) rotate(4deg) scale(0.5)`, offset: 0.45 },
-        { transform: `translate3d(${to.x - 100}px, ${to.y - 150}px, 0) rotate(0deg) scale(0.34)`, offset: 1 },
-      ],
-      { duration: 520, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' },
-    );
-    anim.onfinish = () => {
-      element.remove();
+    const gen = ++this.spawnGen;
+    window.setTimeout(() => {
+      if (this.spawnGen !== gen) return;
       this.elderFlight = false;
-      this.board.syncUnits(this.battle.units, 0.08);
       this.turnCue = 'enemy-strike';
       this.turnPause = 0.28;
-      this.sync();
-    };
+    }, (DISSOLVE_SEC + 0.28) * 1000);
   }
 
   private finishEnemyMinionProduce(vents: Array<{ col: number; row: number }>, onDone: () => void): void {
@@ -1108,7 +1110,6 @@ export class BattleView {
     this.elderFlight = false;
     this.spawnGen += 1;
     this.board.clearSpellPaints();
-    for (const card of this.root.querySelectorAll('.is-elder-play')) card.remove();
     this.board.syncUnits([]);
   }
 

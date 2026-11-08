@@ -6,6 +6,25 @@ export type TalkLine = {
   text: string;
 };
 
+export const TALK_SAVE_KEY = 'roguegame.opening-talk';
+
+export function shouldPlayOpeningTalk(): boolean {
+  try {
+    if (new URLSearchParams(location.search).get('talk') === '1') return true;
+    return localStorage.getItem(TALK_SAVE_KEY) !== 'done';
+  } catch {
+    return true;
+  }
+}
+
+export function markOpeningTalkDone(): void {
+  try {
+    localStorage.setItem(TALK_SAVE_KEY, 'done');
+  } catch {
+    /* private mode */
+  }
+}
+
 export const TALK_SCRIPT: TalkLine[] = [
   { side: 'right', name: '老者', text: '先别动手。坐下，听我把这一桌的规矩说完。' },
   { side: 'left', name: '你', text: '……我该怎么打？' },
